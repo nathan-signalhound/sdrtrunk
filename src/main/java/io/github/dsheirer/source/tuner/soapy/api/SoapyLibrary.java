@@ -1,0 +1,118 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2014-2026 Dennis Sheirer
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+package io.github.dsheirer.source.tuner.soapy.api;
+
+import java.lang.foreign.AddressLayout;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
+
+/**
+ * Thin binding to the SoapySDR C API (SoapySDR/Device.h and SoapySDR/Types.h).
+ *
+ * Each method mirrors one C function.  Pointers are passed and returned as memory segments.  Nothing is copied or
+ * freed here: memory that SoapySDR returns must be released by the caller, as documented on each method.  Functions
+ * are added as they are needed.
+ */
+public class SoapyLibrary
+{
+    private static SoapyLibrary sInstance;
+
+    private final MethodHandle mEnumerateStrArgs;
+    private final MethodHandle mKwargsListClear;
+
+    /**
+     * Binds the SoapySDR functions.  Use {@link #getInstance()}.
+     * @throws SoapyException if the library is not available or a function cannot be found
+     */
+    private SoapyLibrary() throws SoapyException
+    {
+        SymbolLookup lookup = SoapyLibraryHelper.getSymbolLookup();
+        Linker linker = Linker.nativeLinker();
+
+        AddressLayout pointer = ValueLayout.ADDRESS;
+        ValueLayout.OfLong sizeT = ValueLayout.JAVA_LONG;
+
+        mEnumerateStrArgs = bind(linker, lookup, "SoapySDRDevice_enumerateStrArgs",
+                FunctionDescriptor.of(pointer, pointer, pointer));
+        mKwargsListClear = bind(linker, lookup, "SoapySDRKwargsList_clear", FunctionDescriptor.ofVoid(pointer, sizeT));
+    }
+
+    /**
+     * Shared instance of the binding.
+     * @return instance
+     * @throws SoapyException if the SoapySDR library is not available or cannot be bound
+     */
+    public static synchronized SoapyLibrary getInstance() throws SoapyException
+    {
+        if(sInstance == null)
+        {
+            sInstance = new SoapyLibrary();
+        }
+
+        return sInstance;
+    }
+
+    private static MethodHandle bind(Linker linker, SymbolLookup lookup, String name, FunctionDescriptor descriptor)
+            throws SoapyException
+    {
+        MemorySegment address = lookup.find(name).orElseThrow(() ->
+                new SoapyException("SoapySDR library is missing function [" + name + "]"));
+        return linker.downcallHandle(address, descriptor);
+    }
+
+    /**
+     * Enumerates devices.
+     * @param args markup filter string (null-terminated), empty to find all devices
+     * @param lengthOut address of a size_t that receives the array length
+     * @return address of a SoapySDRKwargs array, which the caller must release with {@link #kwargsListClear}
+     */
+    public MemorySegment enumerate(MemorySegment args, MemorySegment lengthOut) throws SoapyException
+    {
+        try
+        {
+            return (MemorySegment) mEnumerateStrArgs.invokeExact(args, lengthOut);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_enumerateStrArgs]", t);
+        }
+    }
+
+    /**
+     * Frees an array of SoapySDRKwargs structures, such as the result of {@link #enumerate}, and their contents.
+     * @param array to free
+     * @param length number of structures in the array
+     */
+    public void kwargsListClear(MemorySegment array, long length) throws SoapyException
+    {
+        try
+        {
+            mKwargsListClear.invokeExact(array, length);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRKwargsList_clear]", t);
+        }
+    }
+}

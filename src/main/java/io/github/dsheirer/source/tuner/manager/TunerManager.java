@@ -44,6 +44,10 @@ import io.github.dsheirer.source.tuner.sdrplay.api.SDRplay;
 import io.github.dsheirer.source.tuner.sdrplay.api.device.DeviceInfo;
 import io.github.dsheirer.source.tuner.sdrplay.rspDuo.DiscoveredRspDuoTuner1;
 import io.github.dsheirer.source.tuner.soapy.DiscoveredSoapyTuner;
+import io.github.dsheirer.source.tuner.soapy.api.SoapyDeviceFinder;
+import io.github.dsheirer.source.tuner.soapy.api.SoapyDeviceInfo;
+import io.github.dsheirer.source.tuner.soapy.api.SoapyException;
+import io.github.dsheirer.source.tuner.soapy.api.SoapyLibraryHelper;
 import io.github.dsheirer.source.tuner.ui.DiscoveredTunerModel;
 import io.github.dsheirer.util.ThreadPool;
 import java.nio.ByteBuffer;
@@ -421,6 +425,25 @@ public class TunerManager implements IDiscoveredTunerStatusListener
      */
     private void discoverSoapyTuners()
     {
+        //Checking availability loads the SoapySDR library and logs the outcome
+        if(SoapyLibraryHelper.isAvailable())
+        {
+            try
+            {
+                List<SoapyDeviceInfo> devices = SoapyDeviceFinder.find();
+                mLog.info("Discovered [" + devices.size() + "] SoapySDR devices");
+
+                for(SoapyDeviceInfo device: devices)
+                {
+                    mLog.info("SoapySDR device: " + device.args());
+                }
+            }
+            catch(SoapyException se)
+            {
+                mLog.error("Error discovering SoapySDR devices", se);
+            }
+        }
+
         ChannelizerType channelizerType = mUserPreferences.getTunerPreference().getChannelizerType();
         startAndConfigureTuner(new DiscoveredSoapyTuner(channelizerType));
     }
