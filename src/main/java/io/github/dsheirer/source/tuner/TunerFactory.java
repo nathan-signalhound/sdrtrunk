@@ -125,6 +125,8 @@ import io.github.dsheirer.source.tuner.sdrplay.rspDx.IControlRspDx;
 import io.github.dsheirer.source.tuner.sdrplay.rspDx.RspDxTunerConfiguration;
 import io.github.dsheirer.source.tuner.sdrplay.rspDx.RspDxTunerController;
 import io.github.dsheirer.source.tuner.sdrplay.rspDx.RspDxTunerEditor;
+import io.github.dsheirer.source.tuner.soapy.SoapyTunerConfiguration;
+import io.github.dsheirer.source.tuner.soapy.SoapyTunerEditor;
 import io.github.dsheirer.source.tuner.ui.TunerEditor;
 import java.util.ArrayList;
 import java.util.List;
@@ -452,6 +454,8 @@ public class TunerFactory
                 return new RspDuoTuner2Configuration(uniqueID);
             case RSP_DX:
                 return new RspDxTunerConfiguration(uniqueID);
+            case SOAPY:
+                return new SoapyTunerConfiguration(uniqueID);
             default:
                 throw new IllegalArgumentException("Unrecognized tuner type [" + type.name() + "]");
         }
@@ -531,6 +535,8 @@ public class TunerFactory
                     }
                 }
                 return new RTL2832UnknownTunerEditor(userPreferences, tunerManager, discoveredTuner);
+            case SOAPY:
+                return new SoapyTunerEditor(userPreferences, tunerManager, discoveredTuner);
             case TEST_TUNER:
             case UNKNOWN:
             default:

@@ -46,6 +46,7 @@ public enum TunerType
     RSP_DUO_1("RSPduo Tuner 1"),
     RSP_DUO_2("RSPduo Tuner 2"),
     RSP_DX("RSPdx"),
+    SOAPY("SoapySDR"),
 
     TEST("Test"),
     RECORDING("Recording"),

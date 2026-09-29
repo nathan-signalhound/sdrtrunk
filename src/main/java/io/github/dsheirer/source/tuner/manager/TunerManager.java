@@ -43,6 +43,7 @@ import io.github.dsheirer.source.tuner.sdrplay.api.SDRPlayException;
 import io.github.dsheirer.source.tuner.sdrplay.api.SDRplay;
 import io.github.dsheirer.source.tuner.sdrplay.api.device.DeviceInfo;
 import io.github.dsheirer.source.tuner.sdrplay.rspDuo.DiscoveredRspDuoTuner1;
+import io.github.dsheirer.source.tuner.soapy.DiscoveredSoapyTuner;
 import io.github.dsheirer.source.tuner.ui.DiscoveredTunerModel;
 import io.github.dsheirer.util.ThreadPool;
 import java.nio.ByteBuffer;
@@ -169,6 +170,7 @@ public class TunerManager implements IDiscoveredTunerStatusListener
             discoverSdrPlayTuners();
         }
 
+        discoverSoapyTuners();
         discoverRecordingTuners();
     }
 
@@ -412,6 +414,15 @@ public class TunerManager implements IDiscoveredTunerStatusListener
 
             mSDRplay = null;
         }
+    }
+
+    /**
+     * Discover SoapySDR tuners. Currently this is just a place holder.
+     */
+    private void discoverSoapyTuners()
+    {
+        ChannelizerType channelizerType = mUserPreferences.getTunerPreference().getChannelizerType();
+        startAndConfigureTuner(new DiscoveredSoapyTuner(channelizerType));
     }
 
     /**
