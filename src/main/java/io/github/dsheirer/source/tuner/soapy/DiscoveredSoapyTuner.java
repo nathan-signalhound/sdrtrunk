@@ -23,6 +23,7 @@ import io.github.dsheirer.preference.source.ChannelizerType;
 import io.github.dsheirer.source.SourceException;
 import io.github.dsheirer.source.tuner.TunerClass;
 import io.github.dsheirer.source.tuner.manager.DiscoveredTuner;
+import io.github.dsheirer.source.tuner.soapy.api.SoapyDeviceInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,16 +33,18 @@ import org.slf4j.LoggerFactory;
 public class DiscoveredSoapyTuner extends DiscoveredTuner
 {
     private static final Logger mLog = LoggerFactory.getLogger(DiscoveredSoapyTuner.class);
-    public static final String SKELETON_ID = "SoapySDR Tuner (skeleton)";
 
+    private final SoapyDeviceInfo mDeviceInfo;
     private final ChannelizerType mChannelizerType;
 
     /**
      * Constructs an instance
+     * @param deviceInfo for the device that SoapySDR found
      * @param channelizerType to use for the tuner
      */
-    public DiscoveredSoapyTuner(ChannelizerType channelizerType)
+    public DiscoveredSoapyTuner(SoapyDeviceInfo deviceInfo, ChannelizerType channelizerType)
     {
+        mDeviceInfo = deviceInfo;
         mChannelizerType = channelizerType;
     }
 
@@ -54,7 +57,9 @@ public class DiscoveredSoapyTuner extends DiscoveredTuner
     @Override
     public String getId()
     {
-        return SKELETON_ID;
+        //The driver's label normally includes the model and serial number, for example: SM200C [70100002]
+        String label = mDeviceInfo.args().get("label");
+        return label != null ? label : "SoapySDR " + mDeviceInfo.args();
     }
 
     @Override
@@ -62,7 +67,7 @@ public class DiscoveredSoapyTuner extends DiscoveredTuner
     {
         if(isAvailable() && !hasTuner())
         {
-            mTuner = new SoapyTuner(new SoapyTunerController(this), this, mChannelizerType);
+            mTuner = new SoapyTuner(getId(), new SoapyTunerController(this), this, mChannelizerType);
 
             try
             {

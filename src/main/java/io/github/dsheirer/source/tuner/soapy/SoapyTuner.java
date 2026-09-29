@@ -29,16 +29,20 @@ import io.github.dsheirer.source.tuner.TunerClass;
  */
 public class SoapyTuner extends Tuner
 {
+    private final String mId;
+
     /**
      * Constructs an instance
+     * @param id that identifies the tuner, for example the device label
      * @param tunerController for the tuner
      * @param tunerErrorListener to receive errors
      * @param channelizerType to use for channelizing the tuner's spectrum
      */
-    public SoapyTuner(SoapyTunerController tunerController, ITunerErrorListener tunerErrorListener,
+    public SoapyTuner(String id, SoapyTunerController tunerController, ITunerErrorListener tunerErrorListener,
                       ChannelizerType channelizerType)
     {
         super(tunerController, tunerErrorListener, channelizerType);
+        mId = id;
     }
 
     @Override
@@ -51,7 +55,7 @@ public class SoapyTuner extends Tuner
     @Override
     public String getUniqueID()
     {
-        return DiscoveredSoapyTuner.SKELETON_ID;
+        return mId;
     }
 
     @Override
@@ -63,7 +67,7 @@ public class SoapyTuner extends Tuner
     @Override
     public String getPreferredName()
     {
-        return DiscoveredSoapyTuner.SKELETON_ID;
+        return mId;
     }
 
     @Override

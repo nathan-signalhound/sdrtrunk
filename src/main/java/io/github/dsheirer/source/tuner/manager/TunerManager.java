@@ -421,7 +421,7 @@ public class TunerManager implements IDiscoveredTunerStatusListener
     }
 
     /**
-     * Discover SoapySDR tuners. Currently this is just a place holder.
+     * Discover SoapySDR tuners.
      */
     private void discoverSoapyTuners()
     {
@@ -433,9 +433,11 @@ public class TunerManager implements IDiscoveredTunerStatusListener
                 List<SoapyDeviceInfo> devices = SoapyDeviceFinder.find();
                 mLog.info("Discovered [" + devices.size() + "] SoapySDR devices");
 
+                ChannelizerType channelizerType = mUserPreferences.getTunerPreference().getChannelizerType();
+
                 for(SoapyDeviceInfo device: devices)
                 {
-                    mLog.info("SoapySDR device: " + device.args());
+                    startAndConfigureTuner(new DiscoveredSoapyTuner(device, channelizerType));
                 }
             }
             catch(SoapyException se)
@@ -443,9 +445,6 @@ public class TunerManager implements IDiscoveredTunerStatusListener
                 mLog.error("Error discovering SoapySDR devices", se);
             }
         }
-
-        ChannelizerType channelizerType = mUserPreferences.getTunerPreference().getChannelizerType();
-        startAndConfigureTuner(new DiscoveredSoapyTuner(channelizerType));
     }
 
     /**
