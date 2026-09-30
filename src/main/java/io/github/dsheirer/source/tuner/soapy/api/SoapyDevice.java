@@ -163,6 +163,20 @@ public class SoapyDevice implements AutoCloseable
         return mLibrary.getFrequency(handle(), RX, CHANNEL);
     }
 
+    public void setSampleRate(double samplesPerSecond) throws SoapyException
+    {
+        if(mLibrary.setSampleRate(handle(), RX, CHANNEL, samplesPerSecond) != 0)
+        {
+            throw new SoapyException("Unable to set sample rate [" + samplesPerSecond + "] Hz: " +
+                    mLibrary.lastError());
+        }
+    }
+
+    public double getSampleRate() throws SoapyException
+    {
+        return mLibrary.getSampleRate(handle(), RX, CHANNEL);
+    }
+
     private MemorySegment handle() throws SoapyException
     {
         if(mHandle == null)

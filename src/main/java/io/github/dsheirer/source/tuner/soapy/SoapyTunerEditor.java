@@ -22,8 +22,13 @@ package io.github.dsheirer.source.tuner.soapy;
 import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.source.tuner.manager.DiscoveredTuner;
 import io.github.dsheirer.source.tuner.manager.TunerManager;
+import io.github.dsheirer.source.SourceException;
 import io.github.dsheirer.source.tuner.ui.TunerEditor;
+import java.util.List;
+import javax.swing.DefaultComboBoxModel;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JSeparator;
 import net.miginfocom.swing.MigLayout;
 
@@ -33,6 +38,8 @@ import net.miginfocom.swing.MigLayout;
 public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfiguration>
 {
     private static final long serialVersionUID = 1L;
+
+    private JComboBox<SoapySampleRate> mSampleRateCombo;
 
     /**
      * Constructs an instance
@@ -49,7 +56,7 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
 
     private void init()
     {
-        setLayout(new MigLayout("fill,wrap 3", "[right][grow,fill]", "[][][][][grow]"));
+        setLayout(new MigLayout("fill,wrap 3", "[right][grow,fill]", "[][][][][][grow]"));
 
         add(new JLabel("Tuner:"));
         add(getTunerIdLabel(), "wrap");
@@ -59,6 +66,41 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
         add(new JSeparator(), "span,growx,push");
         add(new JLabel("Frequency (MHz):"));
         add(getFrequencyPanel(), "wrap");
+        add(new JLabel("Sample Rate:"));
+        add(getSampleRateCombo(), "wrap");
+    }
+
+    private JComboBox<SoapySampleRate> getSampleRateCombo()
+    {
+        if(mSampleRateCombo == null)
+        {
+            mSampleRateCombo = new JComboBox<>();
+            mSampleRateCombo.setEnabled(false);
+            mSampleRateCombo.setToolTipText("Select a sample rate for the tuner");
+            mSampleRateCombo.addActionListener(e ->
+            {
+                SoapySampleRate sampleRate = (SoapySampleRate)mSampleRateCombo.getSelectedItem();
+
+                if(hasTuner() && !isLoading() && sampleRate != null)
+                {
+                    try
+                    {
+                        getTuner().getSoapyTunerController().setSampleRate(sampleRate.rate());
+
+                        adjustForSampleRate(sampleRate.rate());
+
+                        save();
+                    }
+                    catch(SourceException se)
+                    {
+                        JOptionPane.showMessageDialog(SoapyTunerEditor.this, "Unable to set the sample rate: " +
+                                se.getMessage());
+                    }
+                }
+            });
+        }
+
+        return mSampleRateCombo;
     }
 
     @Override
@@ -79,6 +121,7 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
     public void setTunerLockState(boolean locked)
     {
         getFrequencyPanel().updateControls();
+        getSampleRateCombo().setEnabled(hasTuner() && !locked);
     }
 
     @Override
@@ -99,6 +142,19 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
         getButtonPanel().updateControls();
         getFrequencyPanel().updateControls();
 
+        if(hasTuner())
+        {
+            List<SoapySampleRate> rates = getTuner().getSoapyTunerController().getSampleRates();
+            getSampleRateCombo().setModel(new DefaultComboBoxModel<>(rates.toArray(new SoapySampleRate[0])));
+            getSampleRateCombo().setSelectedItem(new SoapySampleRate(getCurrentSampleRate()));
+            getSampleRateCombo().setEnabled(!getTuner().getTunerController().isLockedSampleRate());
+        }
+        else
+        {
+            getSampleRateCombo().setModel(new DefaultComboBoxModel<>());
+            getSampleRateCombo().setEnabled(false);
+        }
+
         setLoading(false);
     }
 
@@ -111,6 +167,14 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
             config.setFrequency(getFrequencyControl().getFrequency());
             config.setMinimumFrequency(getMinimumFrequencyTextField().getFrequency());
             config.setMaximumFrequency(getMaximumFrequencyTextField().getFrequency());
+
+            SoapySampleRate sampleRate = (SoapySampleRate)getSampleRateCombo().getSelectedItem();
+
+            if(sampleRate != null)
+            {
+                config.setSampleRate(sampleRate.rate());
+            }
+
             saveConfiguration();
         }
     }

@@ -29,6 +29,8 @@ import io.github.dsheirer.source.tuner.configuration.TunerConfiguration;
  */
 public class SoapyTunerConfiguration extends TunerConfiguration
 {
+    private int mSampleRate;
+
     /**
      * Default constructor to support Jackson
      */
@@ -45,6 +47,16 @@ public class SoapyTunerConfiguration extends TunerConfiguration
     public SoapyTunerConfiguration(String uniqueId)
     {
         super(uniqueId);
+    }
+
+    public int getSampleRate()
+    {
+        return mSampleRate;
+    }
+
+    public void setSampleRate(int sampleRate)
+    {
+        mSampleRate = sampleRate;
     }
 
     @JsonIgnore

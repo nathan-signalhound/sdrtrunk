@@ -29,7 +29,10 @@ import io.github.dsheirer.source.tuner.soapy.api.SoapyDeviceInfo;
 import io.github.dsheirer.source.tuner.soapy.api.SoapyException;
 import io.github.dsheirer.source.tuner.soapy.api.SoapyRange;
 import java.text.DecimalFormat;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +48,9 @@ public class SoapyTunerController extends TunerController
 
     //The sdrtrunk frequency fields hold at most 9999.999999 MHz, so limit the tuner to what the fields can show
     private static final long MAXIMUM_SUPPORTED_FREQUENCY_HZ = 9_999_999_999L;
-    private static final int PLACEHOLDER_SAMPLE_RATE = 2_400_000;
+    private static final long CHANNEL_SPACING_HZ = 25_000;
+    private static final long MINIMUM_SAMPLE_RATE_HZ = 1_000_000;
+    private static final long MAXIMUM_SAMPLE_RATE_HZ = 200_000_000;
     private static final int MIDDLE_UNUSABLE_BANDWIDTH = 0;
     private static final double USABLE_BANDWIDTH_PERCENTAGE = 1.0;
 
@@ -54,6 +59,8 @@ public class SoapyTunerController extends TunerController
     private final SoapyDeviceInfo mDeviceInfo;
     private SoapyDevice mDevice;
     private long mTunedFrequency = 100_000_000;
+    private int mSampleRate;
+    private List<SoapySampleRate> mSampleRates = List.of();
     private long mDeviceMinimumFrequency = MINIMUM_TUNABLE_FREQUENCY_HZ;
     private long mDeviceMaximumFrequency = MAXIMUM_TUNABLE_FREQUENCY_HZ;
 
@@ -83,6 +90,16 @@ public class SoapyTunerController extends TunerController
                 readDeviceCapabilities();
                 mLog.info(mDeviceInfo.args().get("label") + " receive stream set up, format [" +
                         mDevice.setupStream() + "]");
+
+                if(mSampleRates.isEmpty())
+                {
+                    throw new SoapyException("Device does not support a sample rate that sdrtrunk can use");
+                }
+
+                applySampleRate(mSampleRates.get(0).rate());
+                mFrequencyController.setFrequency(mTunedFrequency);
+                mLog.info("SoapySDR device opened: " + mDeviceInfo.args().get("label") +
+                        " (no samples are streamed yet)");
             }
             catch(SoapyException se)
             {
@@ -90,12 +107,80 @@ public class SoapyTunerController extends TunerController
                 stop();
                 throw new SourceException(se.getMessage(), se);
             }
+            catch(SourceException se)
+            {
+                stop();
+                throw se;
+            }
+        }
+    }
+
+    public List<SoapySampleRate> getSampleRates()
+    {
+        return mSampleRates;
+    }
+
+    public void setSampleRate(int sampleRate) throws SourceException
+    {
+        try
+        {
+            applySampleRate(sampleRate);
+        }
+        catch(SoapyException se)
+        {
+            throw new SourceException(se.getMessage(), se);
+        }
+    }
+
+    private void applySampleRate(int sampleRate) throws SoapyException, SourceException
+    {
+        if(mDevice == null)
+        {
+            throw new SourceException("Unable to set sample rate - SoapySDR device is not open");
         }
 
-        mFrequencyController.setFrequency(mTunedFrequency);
-        mFrequencyController.setSampleRate(PLACEHOLDER_SAMPLE_RATE);
-        mLog.info("SoapySDR device opened: " + mDeviceInfo.args().get("label") +
-                " (no samples are streamed yet)");
+        if(isLockedSampleRate())
+        {
+            throw new SourceException("Unable to change the sample rate while channels are being decoded");
+        }
+
+        mDevice.setSampleRate(sampleRate);
+        mSampleRate = (int)Math.round(mDevice.getSampleRate());
+        mLog.info(mDeviceInfo.args().get("label") + " sample rate [" + mSampleRate + "] Hz, requested [" +
+                sampleRate + "] Hz");
+        mFrequencyController.setSampleRate(mSampleRate);
+    }
+
+    static List<SoapySampleRate> usableSampleRates(List<SoapyRange> ranges)
+    {
+        Set<SoapySampleRate> rates = new TreeSet<>();
+
+        for(SoapyRange range: ranges)
+        {
+            boolean discrete = range.minimum() == range.maximum();
+
+            if(discrete && isUsableSampleRate(range.minimum()))
+            {
+                rates.add(new SoapySampleRate((int)range.minimum()));
+            }
+        }
+
+        return new ArrayList<>(rates);
+    }
+
+    private static boolean isUsableSampleRate(double rate)
+    {
+        if(rate != Math.rint(rate))
+        {
+            return false;
+        }
+
+        if(rate < MINIMUM_SAMPLE_RATE_HZ || rate > MAXIMUM_SAMPLE_RATE_HZ)
+        {
+            return false;
+        }
+
+        return rate % CHANNEL_SPACING_HZ == 0;
     }
 
     /**
@@ -110,6 +195,9 @@ public class SoapyTunerController extends TunerController
 
         mLog.info(mDeviceInfo.args().get("label") + " supports frequency [" + format(frequencies) +
                 "] Hz, sample rate [" + format(sampleRates) + "] Hz, bandwidth [" + format(bandwidths) + "] Hz");
+
+        mSampleRates = usableSampleRates(sampleRates);
+        mLog.info(mDeviceInfo.args().get("label") + " usable sample rates " + mSampleRates);
 
         if(!frequencies.isEmpty())
         {
@@ -137,6 +225,18 @@ public class SoapyTunerController extends TunerController
     public void apply(TunerConfiguration config) throws SourceException
     {
         super.apply(config);
+
+        if(config instanceof SoapyTunerConfiguration soapyConfig)
+        {
+            int sampleRate = soapyConfig.getSampleRate();
+
+            if(mSampleRates.contains(new SoapySampleRate(sampleRate)) && sampleRate != mSampleRate)
+            {
+                setSampleRate(sampleRate);
+            }
+
+            soapyConfig.setSampleRate(mSampleRate);
+        }
 
         //A new configuration has no frequency limits yet, so record the limits that the device reported
         if(config.getMinimumFrequency() == 0)
@@ -221,6 +321,6 @@ public class SoapyTunerController extends TunerController
     @Override
     public double getCurrentSampleRate() throws SourceException
     {
-        return PLACEHOLDER_SAMPLE_RATE;
+        return mSampleRate;
     }
 }

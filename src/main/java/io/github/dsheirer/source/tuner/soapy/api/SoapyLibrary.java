@@ -48,6 +48,8 @@ public class SoapyLibrary
     private final MethodHandle mGetBandwidthRange;
     private final MethodHandle mSetFrequency;
     private final MethodHandle mGetFrequency;
+    private final MethodHandle mSetSampleRate;
+    private final MethodHandle mGetSampleRate;
     private final MethodHandle mGetNativeStreamFormat;
     private final MethodHandle mSetupStream;
     private final MethodHandle mCloseStream;
@@ -80,6 +82,10 @@ public class SoapyLibrary
         mSetFrequency = bind(linker, lookup, "SoapySDRDevice_setFrequency", FunctionDescriptor.of(ValueLayout.JAVA_INT,
                 pointer, ValueLayout.JAVA_INT, sizeT, ValueLayout.JAVA_DOUBLE, pointer));
         mGetFrequency = bind(linker, lookup, "SoapySDRDevice_getFrequency", FunctionDescriptor.of(
+                ValueLayout.JAVA_DOUBLE, pointer, ValueLayout.JAVA_INT, sizeT));
+        mSetSampleRate = bind(linker, lookup, "SoapySDRDevice_setSampleRate", FunctionDescriptor.of(
+                ValueLayout.JAVA_INT, pointer, ValueLayout.JAVA_INT, sizeT, ValueLayout.JAVA_DOUBLE));
+        mGetSampleRate = bind(linker, lookup, "SoapySDRDevice_getSampleRate", FunctionDescriptor.of(
                 ValueLayout.JAVA_DOUBLE, pointer, ValueLayout.JAVA_INT, sizeT));
         mGetNativeStreamFormat = bind(linker, lookup, "SoapySDRDevice_getNativeStreamFormat",
                 FunctionDescriptor.of(pointer, pointer, ValueLayout.JAVA_INT, sizeT, pointer));
@@ -280,6 +286,30 @@ public class SoapyLibrary
         catch(Throwable t)
         {
             throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_getFrequency]", t);
+        }
+    }
+
+    public int setSampleRate(MemorySegment device, int direction, long channel, double rate) throws SoapyException
+    {
+        try
+        {
+            return (int) mSetSampleRate.invokeExact(device, direction, channel, rate);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_setSampleRate]", t);
+        }
+    }
+
+    public double getSampleRate(MemorySegment device, int direction, long channel) throws SoapyException
+    {
+        try
+        {
+            return (double) mGetSampleRate.invokeExact(device, direction, channel);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_getSampleRate]", t);
         }
     }
 
