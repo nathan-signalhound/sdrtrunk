@@ -143,6 +143,39 @@ public final class SoapyNative
         return list;
     }
 
+    /**
+     * Formats device arguments as a SoapySDR markup string: comma separated key=value pairs.
+     * @param args to format
+     * @return markup string
+     * @throws IllegalArgumentException if any key or value contains a comma or equals sign, which the plain markup
+     * cannot represent
+     */
+    public static String toArgString(Map<String,String> args)
+    {
+        StringBuilder sb = new StringBuilder();
+
+        for(Map.Entry<String,String> entry: args.entrySet())
+        {
+            String key = entry.getKey();
+            String value = entry.getValue();
+
+            if(key.contains(",") || key.contains("=") || value.contains(",") || value.contains("="))
+            {
+                throw new IllegalArgumentException("SoapySDR argument [" + key + "=" + value +
+                        "] contains a comma or equals sign");
+            }
+
+            if(!sb.isEmpty())
+            {
+                sb.append(',');
+            }
+
+            sb.append(key).append('=').append(value);
+        }
+
+        return sb.toString();
+    }
+
     private static boolean isNull(MemorySegment address)
     {
         return address == null || address.equals(MemorySegment.NULL);

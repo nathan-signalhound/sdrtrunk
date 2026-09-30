@@ -67,7 +67,7 @@ public class DiscoveredSoapyTuner extends DiscoveredTuner
     {
         if(isAvailable() && !hasTuner())
         {
-            mTuner = new SoapyTuner(getId(), new SoapyTunerController(this), this, mChannelizerType);
+            mTuner = new SoapyTuner(getId(), new SoapyTunerController(mDeviceInfo, this), this, mChannelizerType);
 
             try
             {
@@ -76,7 +76,7 @@ public class DiscoveredSoapyTuner extends DiscoveredTuner
             catch(SourceException se)
             {
                 mLog.error("Unable to start tuner [" + getId() + "]", se);
-                setErrorMessage("Error starting tuner [" + getId() + "]");
+                setErrorMessage("Error starting tuner [" + getId() + "] - " + se.getMessage());
                 mTuner = null;
             }
         }

@@ -40,9 +40,12 @@ public class SoapyLibrary
 
     private final MethodHandle mEnumerateStrArgs;
     private final MethodHandle mKwargsListClear;
+    private final MethodHandle mMakeStrArgs;
+    private final MethodHandle mUnmake;
+    private final MethodHandle mLastError;
 
     /**
-     * Binds the SoapySDR functions.  Use {@link #getInstance()}.
+     * Binds the SoapySDR functions.  Use getInstance().
      * @throws SoapyException if the library is not available or a function cannot be found
      */
     private SoapyLibrary() throws SoapyException
@@ -56,6 +59,9 @@ public class SoapyLibrary
         mEnumerateStrArgs = bind(linker, lookup, "SoapySDRDevice_enumerateStrArgs",
                 FunctionDescriptor.of(pointer, pointer, pointer));
         mKwargsListClear = bind(linker, lookup, "SoapySDRKwargsList_clear", FunctionDescriptor.ofVoid(pointer, sizeT));
+        mMakeStrArgs = bind(linker, lookup, "SoapySDRDevice_makeStrArgs", FunctionDescriptor.of(pointer, pointer));
+        mUnmake = bind(linker, lookup, "SoapySDRDevice_unmake", FunctionDescriptor.of(ValueLayout.JAVA_INT, pointer));
+        mLastError = bind(linker, lookup, "SoapySDRDevice_lastError", FunctionDescriptor.of(pointer));
     }
 
     /**
@@ -85,7 +91,7 @@ public class SoapyLibrary
      * Enumerates devices.
      * @param args markup filter string (null-terminated), empty to find all devices
      * @param lengthOut address of a size_t that receives the array length
-     * @return address of a SoapySDRKwargs array, which the caller must release with {@link #kwargsListClear}
+     * @return address of a SoapySDRKwargs array, which the caller must release with kwargsListClear
      */
     public MemorySegment enumerate(MemorySegment args, MemorySegment lengthOut) throws SoapyException
     {
@@ -100,7 +106,7 @@ public class SoapyLibrary
     }
 
     /**
-     * Frees an array of SoapySDRKwargs structures, such as the result of {@link #enumerate}, and their contents.
+     * Frees an array of SoapySDRKwargs structures, such as the result of enumerate, and their contents.
      * @param array to free
      * @param length number of structures in the array
      */
@@ -113,6 +119,56 @@ public class SoapyLibrary
         catch(Throwable t)
         {
             throw new SoapyException("Error invoking SoapySDR function [SoapySDRKwargsList_clear]", t);
+        }
+    }
+
+    /**
+     * Opens a device.
+     * @param args markup string (null-terminated) of device arguments, as reported by enumeration
+     * @return device handle, or NULL on failure (see lastError()).  Release with unmake
+     */
+    public MemorySegment make(MemorySegment args) throws SoapyException
+    {
+        try
+        {
+            return (MemorySegment) mMakeStrArgs.invokeExact(args);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_makeStrArgs]", t);
+        }
+    }
+
+    /**
+     * Closes a device.
+     * @param device handle from make
+     * @return zero on success, or a negative error code
+     */
+    public int unmake(MemorySegment device) throws SoapyException
+    {
+        try
+        {
+            return (int) mUnmake.invokeExact(device);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_unmake]", t);
+        }
+    }
+
+    /**
+     * Message of the last SoapySDR device error on the calling thread.  The library owns the string.
+     * @return message, or null if there is none
+     */
+    public String lastError() throws SoapyException
+    {
+        try
+        {
+            return SoapyNative.readString((MemorySegment) mLastError.invokeExact());
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_lastError]", t);
         }
     }
 }

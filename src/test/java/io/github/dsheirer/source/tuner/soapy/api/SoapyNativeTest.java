@@ -21,11 +21,13 @@ package io.github.dsheirer.source.tuner.soapy.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -87,6 +89,24 @@ public class SoapyNativeTest
             MemorySegment kwargs = arena.allocate(SoapyNative.KWARGS_LAYOUT);
             assertTrue(SoapyNative.readKwargs(kwargs).isEmpty());
         }
+    }
+
+    @Test
+    void toArgString()
+    {
+        Map<String,String> args = new LinkedHashMap<>();
+        args.put("driver", "SignalHoundSM");
+        args.put("deviceAddr", "192.168.2.10");
+        args.put("port", "51665");
+        assertEquals("driver=SignalHoundSM,deviceAddr=192.168.2.10,port=51665", SoapyNative.toArgString(args));
+        assertEquals("", SoapyNative.toArgString(Map.of()));
+    }
+
+    @Test
+    void toArgStringRejectsSeparators()
+    {
+        assertThrows(IllegalArgumentException.class, () -> SoapyNative.toArgString(Map.of("a", "b,c")));
+        assertThrows(IllegalArgumentException.class, () -> SoapyNative.toArgString(Map.of("a=b", "c")));
     }
 
     /** Lays out a char** array with each string allocated separately */

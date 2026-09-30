@@ -23,6 +23,9 @@ import io.github.dsheirer.source.SourceException;
 import io.github.dsheirer.source.tuner.ITunerErrorListener;
 import io.github.dsheirer.source.tuner.TunerController;
 import io.github.dsheirer.source.tuner.TunerType;
+import io.github.dsheirer.source.tuner.soapy.api.SoapyDevice;
+import io.github.dsheirer.source.tuner.soapy.api.SoapyDeviceInfo;
+import io.github.dsheirer.source.tuner.soapy.api.SoapyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,15 +41,19 @@ public class SoapyTunerController extends TunerController
     private static final int MIDDLE_UNUSABLE_BANDWIDTH = 0;
     private static final double USABLE_BANDWIDTH_PERCENTAGE = 1.0;
 
+    private final SoapyDeviceInfo mDeviceInfo;
+    private SoapyDevice mDevice;
     private long mTunedFrequency = 100_000_000;
 
     /**
      * Constructs an instance
+     * @param deviceInfo for the device to control
      * @param tunerErrorListener to receive errors
      */
-    public SoapyTunerController(ITunerErrorListener tunerErrorListener)
+    public SoapyTunerController(SoapyDeviceInfo deviceInfo, ITunerErrorListener tunerErrorListener)
     {
         super(tunerErrorListener);
+        mDeviceInfo = deviceInfo;
         setMinimumFrequency(MINIMUM_TUNABLE_FREQUENCY_HZ);
         setMaximumFrequency(MAXIMUM_TUNABLE_FREQUENCY_HZ);
         setMiddleUnusableHalfBandwidth(MIDDLE_UNUSABLE_BANDWIDTH);
@@ -56,15 +63,33 @@ public class SoapyTunerController extends TunerController
     @Override
     public void start() throws SourceException
     {
+        if(mDevice == null)
+        {
+            try
+            {
+                mDevice = SoapyDevice.open(mDeviceInfo.args());
+            }
+            catch(SoapyException se)
+            {
+                throw new SourceException(se.getMessage(), se);
+            }
+        }
+
         mFrequencyController.setFrequency(mTunedFrequency);
         mFrequencyController.setSampleRate(PLACEHOLDER_SAMPLE_RATE);
-        mLog.info("SoapySDR tuner started (skeleton - no device attached)");
+        mLog.info("SoapySDR device opened: " + mDeviceInfo.args().get("label") +
+                " (no samples are streamed yet)");
     }
 
     @Override
     public void stop()
     {
-        mLog.info("SoapySDR tuner stopped");
+        if(mDevice != null)
+        {
+            mDevice.close();
+            mDevice = null;
+            mLog.info("SoapySDR device closed: " + mDeviceInfo.args().get("label"));
+        }
     }
 
     @Override
