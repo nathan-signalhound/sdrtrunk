@@ -33,6 +33,7 @@ public class SoapyTunerConfiguration extends TunerConfiguration
 {
     private int mSampleRate;
     private Map<String,Double> mGains = new LinkedHashMap<>();
+    private String mAntenna;
 
     /**
      * Default constructor to support Jackson
@@ -70,6 +71,16 @@ public class SoapyTunerConfiguration extends TunerConfiguration
     public void setGains(Map<String,Double> gains)
     {
         mGains = gains;
+    }
+
+    public String getAntenna()
+    {
+        return mAntenna;
+    }
+
+    public void setAntenna(String antenna)
+    {
+        mAntenna = antenna;
     }
 
     @JsonIgnore

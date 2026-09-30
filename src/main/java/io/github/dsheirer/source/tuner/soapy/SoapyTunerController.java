@@ -65,6 +65,8 @@ public class SoapyTunerController extends TunerController
     private List<SoapySampleRate> mSampleRates = List.of();
     private List<SoapyGainElement> mGainElements = List.of();
     private final Map<String,Double> mGains = new LinkedHashMap<>();
+    private List<String> mAntennas = List.of();
+    private String mAntenna;
     private long mDeviceMinimumFrequency = MINIMUM_TUNABLE_FREQUENCY_HZ;
     private long mDeviceMaximumFrequency = MAXIMUM_TUNABLE_FREQUENCY_HZ;
 
@@ -205,6 +207,10 @@ public class SoapyTunerController extends TunerController
 
         readGainElements();
 
+        mAntennas = mDevice.getAntennas();
+        mAntenna = mDevice.getAntenna();
+        mLog.info(mDeviceInfo.args().get("label") + " antennas " + mAntennas + ", current antenna [" + mAntenna + "]");
+
         if(!frequencies.isEmpty())
         {
             mDeviceMinimumFrequency = (long)Math.ceil(frequencies.stream().mapToDouble(SoapyRange::minimum)
@@ -268,6 +274,15 @@ public class SoapyTunerController extends TunerController
             }
 
             soapyConfig.setGains(new LinkedHashMap<>(mGains));
+
+            String antenna = soapyConfig.getAntenna();
+
+            if(antenna != null && mAntennas.contains(antenna) && !antenna.equals(mAntenna))
+            {
+                setAntenna(antenna);
+            }
+
+            soapyConfig.setAntenna(mAntenna);
         }
 
         if(config.getMinimumFrequency() == 0)
@@ -320,6 +335,35 @@ public class SoapyTunerController extends TunerController
             mGains.put(name, mDevice.getGain(name));
             mLog.info(mDeviceInfo.args().get("label") + " gain [" + name + "] [" +
                     RANGE_FORMAT.format(mGains.get(name)) + "] dB, requested [" + RANGE_FORMAT.format(gain) + "] dB");
+        }
+        catch(SoapyException se)
+        {
+            throw new SourceException(se.getMessage(), se);
+        }
+    }
+
+    public List<String> getAntennas()
+    {
+        return mAntennas;
+    }
+
+    public String getAntenna()
+    {
+        return mAntenna;
+    }
+
+    public void setAntenna(String antenna) throws SourceException
+    {
+        if(mDevice == null)
+        {
+            throw new SourceException("Unable to set antenna - SoapySDR device is not open");
+        }
+
+        try
+        {
+            mDevice.setAntenna(antenna);
+            mAntenna = mDevice.getAntenna();
+            mLog.info(mDeviceInfo.args().get("label") + " antenna [" + mAntenna + "], requested [" + antenna + "]");
         }
         catch(SoapyException se)
         {

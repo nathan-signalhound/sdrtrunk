@@ -56,6 +56,9 @@ public class SoapyLibrary
     private final MethodHandle mGetGainElement;
     private final MethodHandle mGetGainElementRange;
     private final MethodHandle mStringsClear;
+    private final MethodHandle mListAntennas;
+    private final MethodHandle mSetAntenna;
+    private final MethodHandle mGetAntenna;
     private final MethodHandle mGetNativeStreamFormat;
     private final MethodHandle mSetupStream;
     private final MethodHandle mCloseStream;
@@ -103,6 +106,12 @@ public class SoapyLibrary
         mGetGainElementRange = bind(linker, lookup, "SoapySDRDevice_getGainElementRange", FunctionDescriptor.of(
                 SoapyNative.RANGE_LAYOUT, pointer, ValueLayout.JAVA_INT, sizeT, pointer));
         mStringsClear = bind(linker, lookup, "SoapySDRStrings_clear", FunctionDescriptor.ofVoid(pointer, sizeT));
+        mListAntennas = bind(linker, lookup, "SoapySDRDevice_listAntennas", FunctionDescriptor.of(pointer, pointer,
+                ValueLayout.JAVA_INT, sizeT, pointer));
+        mSetAntenna = bind(linker, lookup, "SoapySDRDevice_setAntenna", FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                pointer, ValueLayout.JAVA_INT, sizeT, pointer));
+        mGetAntenna = bind(linker, lookup, "SoapySDRDevice_getAntenna", FunctionDescriptor.of(pointer, pointer,
+                ValueLayout.JAVA_INT, sizeT));
         mGetNativeStreamFormat = bind(linker, lookup, "SoapySDRDevice_getNativeStreamFormat",
                 FunctionDescriptor.of(pointer, pointer, ValueLayout.JAVA_INT, sizeT, pointer));
         mSetupStream = bind(linker, lookup, "SoapySDRDevice_setupStream", FunctionDescriptor.of(pointer, pointer,
@@ -378,6 +387,43 @@ public class SoapyLibrary
         catch(Throwable t)
         {
             throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_getGainElementRange]", t);
+        }
+    }
+
+    public MemorySegment listAntennas(MemorySegment device, int direction, long channel, MemorySegment lengthOut)
+            throws SoapyException
+    {
+        try
+        {
+            return (MemorySegment) mListAntennas.invokeExact(device, direction, channel, lengthOut);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_listAntennas]", t);
+        }
+    }
+
+    public int setAntenna(MemorySegment device, int direction, long channel, MemorySegment name) throws SoapyException
+    {
+        try
+        {
+            return (int) mSetAntenna.invokeExact(device, direction, channel, name);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_setAntenna]", t);
+        }
+    }
+
+    public MemorySegment getAntenna(MemorySegment device, int direction, long channel) throws SoapyException
+    {
+        try
+        {
+            return (MemorySegment) mGetAntenna.invokeExact(device, direction, channel);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_getAntenna]", t);
         }
     }
 

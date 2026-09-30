@@ -179,22 +179,7 @@ public class SoapyDevice implements AutoCloseable
 
     public List<String> getGainNames() throws SoapyException
     {
-        try(Arena arena = Arena.ofConfined())
-        {
-            MemorySegment length = arena.allocate(ValueLayout.JAVA_LONG);
-            MemorySegment array = mLibrary.listGains(handle(), RX, CHANNEL, length);
-            long count = length.get(ValueLayout.JAVA_LONG, 0);
-            List<String> names = SoapyNative.readStrings(array, count);
-
-            if(!array.equals(MemorySegment.NULL))
-            {
-                MemorySegment arrayPointer = arena.allocate(ValueLayout.ADDRESS);
-                arrayPointer.set(ValueLayout.ADDRESS, 0, array);
-                mLibrary.stringsClear(arrayPointer, count);
-            }
-
-            return names;
-        }
+        return readStrings(length -> mLibrary.listGains(handle(), RX, CHANNEL, length));
     }
 
     public SoapyRange getGainRange(String name) throws SoapyException
@@ -226,6 +211,35 @@ public class SoapyDevice implements AutoCloseable
         }
     }
 
+    public List<String> getAntennas() throws SoapyException
+    {
+        return readStrings(length -> mLibrary.listAntennas(handle(), RX, CHANNEL, length));
+    }
+
+    public void setAntenna(String name) throws SoapyException
+    {
+        try(Arena arena = Arena.ofConfined())
+        {
+            if(mLibrary.setAntenna(handle(), RX, CHANNEL, arena.allocateFrom(name)) != 0)
+            {
+                throw new SoapyException("Unable to set antenna [" + name + "]: " + mLibrary.lastError());
+            }
+        }
+    }
+
+    public String getAntenna() throws SoapyException
+    {
+        MemorySegment antenna = mLibrary.getAntenna(handle(), RX, CHANNEL);
+        String name = SoapyNative.readString(antenna);
+
+        if(!antenna.equals(MemorySegment.NULL))
+        {
+            mLibrary.free(antenna);
+        }
+
+        return name;
+    }
+
     private MemorySegment handle() throws SoapyException
     {
         if(mHandle == null)
@@ -237,10 +251,9 @@ public class SoapyDevice implements AutoCloseable
     }
 
     /**
-     * A SoapySDR call that returns an array of ranges and reports its length through a pointer.
      */
     @FunctionalInterface
-    private interface RangeCall
+    private interface ArrayCall
     {
         MemorySegment call(MemorySegment lengthOut) throws SoapyException;
     }
@@ -248,7 +261,7 @@ public class SoapyDevice implements AutoCloseable
     /**
      * Makes the call, copies the ranges it returns and releases the memory that SoapySDR allocated.
      */
-    private List<SoapyRange> readRanges(RangeCall call) throws SoapyException
+    private List<SoapyRange> readRanges(ArrayCall call) throws SoapyException
     {
         try(Arena arena = Arena.ofConfined())
         {
@@ -262,6 +275,26 @@ public class SoapyDevice implements AutoCloseable
             }
 
             return ranges;
+        }
+    }
+
+    private List<String> readStrings(ArrayCall call) throws SoapyException
+    {
+        try(Arena arena = Arena.ofConfined())
+        {
+            MemorySegment length = arena.allocate(ValueLayout.JAVA_LONG);
+            MemorySegment array = call.call(length);
+            long count = length.get(ValueLayout.JAVA_LONG, 0);
+            List<String> strings = SoapyNative.readStrings(array, count);
+
+            if(!array.equals(MemorySegment.NULL))
+            {
+                MemorySegment arrayPointer = arena.allocate(ValueLayout.ADDRESS);
+                arrayPointer.set(ValueLayout.ADDRESS, 0, array);
+                mLibrary.stringsClear(arrayPointer, count);
+            }
+
+            return strings;
         }
     }
 

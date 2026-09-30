@@ -43,6 +43,7 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
     private static final long serialVersionUID = 1L;
 
     private JComboBox<SoapySampleRate> mSampleRateCombo;
+    private JComboBox<String> mAntennaCombo;
     private JPanel mGainPanel;
 
     /**
@@ -60,7 +61,7 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
 
     private void init()
     {
-        setLayout(new MigLayout("fill,wrap 3", "[right][grow,fill]", "[][][][][][][grow]"));
+        setLayout(new MigLayout("fill,wrap 3", "[right][grow,fill]", "[][][][][][][][grow]"));
 
         add(new JLabel("Tuner:"));
         add(getTunerIdLabel(), "wrap");
@@ -72,6 +73,8 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
         add(getFrequencyPanel(), "wrap");
         add(new JLabel("Sample Rate:"));
         add(getSampleRateCombo(), "wrap");
+        add(new JLabel("Antenna:"));
+        add(getAntennaCombo(), "wrap");
         add(getGainPanel(), "span,growx");
     }
 
@@ -175,6 +178,36 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
         return mSampleRateCombo;
     }
 
+    private JComboBox<String> getAntennaCombo()
+    {
+        if(mAntennaCombo == null)
+        {
+            mAntennaCombo = new JComboBox<>();
+            mAntennaCombo.setEnabled(false);
+            mAntennaCombo.setToolTipText("Select the antenna for the tuner");
+            mAntennaCombo.addActionListener(e ->
+            {
+                String antenna = (String)mAntennaCombo.getSelectedItem();
+
+                if(hasTuner() && !isLoading() && antenna != null)
+                {
+                    try
+                    {
+                        getTuner().getSoapyTunerController().setAntenna(antenna);
+                        save();
+                    }
+                    catch(SourceException se)
+                    {
+                        JOptionPane.showMessageDialog(SoapyTunerEditor.this, "Unable to set the antenna: " +
+                                se.getMessage());
+                    }
+                }
+            });
+        }
+
+        return mAntennaCombo;
+    }
+
     @Override
     public long getMinimumTunableFrequency()
     {
@@ -220,11 +253,19 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
             getSampleRateCombo().setModel(new DefaultComboBoxModel<>(rates.toArray(new SoapySampleRate[0])));
             getSampleRateCombo().setSelectedItem(new SoapySampleRate(getCurrentSampleRate()));
             getSampleRateCombo().setEnabled(!getTuner().getTunerController().isLockedSampleRate());
+
+            List<String> antennas = getTuner().getSoapyTunerController().getAntennas();
+            getAntennaCombo().setModel(new DefaultComboBoxModel<>(antennas.toArray(new String[0])));
+            getAntennaCombo().setSelectedItem(getTuner().getSoapyTunerController().getAntenna());
+
+            getAntennaCombo().setEnabled(antennas.size() > 1);
         }
         else
         {
             getSampleRateCombo().setModel(new DefaultComboBoxModel<>());
             getSampleRateCombo().setEnabled(false);
+            getAntennaCombo().setModel(new DefaultComboBoxModel<>());
+            getAntennaCombo().setEnabled(false);
         }
 
         updateGainControls();
@@ -252,6 +293,13 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
             if(hasTuner())
             {
                 config.setGains(new LinkedHashMap<>(getTuner().getSoapyTunerController().getGains()));
+            }
+
+            String antenna = (String)getAntennaCombo().getSelectedItem();
+
+            if(antenna != null)
+            {
+                config.setAntenna(antenna);
             }
 
             saveConfiguration();
