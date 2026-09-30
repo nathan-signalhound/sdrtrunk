@@ -45,6 +45,11 @@ public class SoapyTuner extends Tuner
         mId = id;
     }
 
+    public SoapyTunerController getSoapyTunerController()
+    {
+        return (SoapyTunerController)getTunerController();
+    }
+
     @Override
     public int getMaximumUSBBitsPerSecond()
     {

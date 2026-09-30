@@ -43,6 +43,10 @@ public class SoapyLibrary
     private final MethodHandle mMakeStrArgs;
     private final MethodHandle mUnmake;
     private final MethodHandle mLastError;
+    private final MethodHandle mGetFrequencyRange;
+    private final MethodHandle mGetSampleRateRange;
+    private final MethodHandle mGetBandwidthRange;
+    private final MethodHandle mFree;
 
     /**
      * Binds the SoapySDR functions.  Use getInstance().
@@ -62,6 +66,13 @@ public class SoapyLibrary
         mMakeStrArgs = bind(linker, lookup, "SoapySDRDevice_makeStrArgs", FunctionDescriptor.of(pointer, pointer));
         mUnmake = bind(linker, lookup, "SoapySDRDevice_unmake", FunctionDescriptor.of(ValueLayout.JAVA_INT, pointer));
         mLastError = bind(linker, lookup, "SoapySDRDevice_lastError", FunctionDescriptor.of(pointer));
+
+        //The range functions all take (device, direction, channel, address of a length) and return an array
+        FunctionDescriptor rangeArray = FunctionDescriptor.of(pointer, pointer, ValueLayout.JAVA_INT, sizeT, pointer);
+        mGetFrequencyRange = bind(linker, lookup, "SoapySDRDevice_getFrequencyRange", rangeArray);
+        mGetSampleRateRange = bind(linker, lookup, "SoapySDRDevice_getSampleRateRange", rangeArray);
+        mGetBandwidthRange = bind(linker, lookup, "SoapySDRDevice_getBandwidthRange", rangeArray);
+        mFree = bind(linker, lookup, "SoapySDR_free", FunctionDescriptor.ofVoid(pointer));
     }
 
     /**
@@ -169,6 +180,67 @@ public class SoapyLibrary
         catch(Throwable t)
         {
             throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_lastError]", t);
+        }
+    }
+
+    /**
+     * Frequency ranges that the device supports.
+     * @param device handle from make
+     * @param direction of the channel (1 for receive)
+     * @param channel index
+     * @param lengthOut address of a size_t that receives the array length
+     * @return address of a SoapySDRRange array, which the caller must release with free
+     */
+    public MemorySegment getFrequencyRange(MemorySegment device, int direction, long channel, MemorySegment lengthOut)
+            throws SoapyException
+    {
+        return getRanges(mGetFrequencyRange, "getFrequencyRange", device, direction, channel, lengthOut);
+    }
+
+    /**
+     * Sample rate ranges that the device supports.  Parameters and result are the same as getFrequencyRange.
+     */
+    public MemorySegment getSampleRateRange(MemorySegment device, int direction, long channel, MemorySegment lengthOut)
+            throws SoapyException
+    {
+        return getRanges(mGetSampleRateRange, "getSampleRateRange", device, direction, channel, lengthOut);
+    }
+
+    /**
+     * Bandwidth ranges that the device supports.  Parameters and result are the same as getFrequencyRange.
+     */
+    public MemorySegment getBandwidthRange(MemorySegment device, int direction, long channel, MemorySegment lengthOut)
+            throws SoapyException
+    {
+        return getRanges(mGetBandwidthRange, "getBandwidthRange", device, direction, channel, lengthOut);
+    }
+
+    private static MemorySegment getRanges(MethodHandle handle, String name, MemorySegment device, int direction,
+                                           long channel, MemorySegment lengthOut) throws SoapyException
+    {
+        try
+        {
+            return (MemorySegment) handle.invokeExact(device, direction, channel, lengthOut);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_" + name + "]", t);
+        }
+    }
+
+    /**
+     * Frees memory that SoapySDR allocated, such as an array of ranges.
+     * @param pointer to free
+     */
+    public void free(MemorySegment pointer) throws SoapyException
+    {
+        try
+        {
+            mFree.invokeExact(pointer);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDR_free]", t);
         }
     }
 }

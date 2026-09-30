@@ -34,7 +34,8 @@ public class SoapyTunerConfiguration extends TunerConfiguration
      */
     public SoapyTunerConfiguration()
     {
-        super(SoapyTunerController.MINIMUM_TUNABLE_FREQUENCY_HZ, SoapyTunerController.MAXIMUM_TUNABLE_FREQUENCY_HZ);
+        //Zero means no saved limit, so the controller keeps the limits that the device reports
+        super(0, 0);
     }
 
     /**
@@ -44,8 +45,6 @@ public class SoapyTunerConfiguration extends TunerConfiguration
     public SoapyTunerConfiguration(String uniqueId)
     {
         super(uniqueId);
-        setMinimumFrequency(SoapyTunerController.MINIMUM_TUNABLE_FREQUENCY_HZ);
-        setMaximumFrequency(SoapyTunerController.MAXIMUM_TUNABLE_FREQUENCY_HZ);
     }
 
     @JsonIgnore

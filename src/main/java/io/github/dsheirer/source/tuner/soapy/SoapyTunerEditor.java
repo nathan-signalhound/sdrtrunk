@@ -64,13 +64,15 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
     @Override
     public long getMinimumTunableFrequency()
     {
-        return SoapyTunerController.MINIMUM_TUNABLE_FREQUENCY_HZ;
+        return hasTuner() ? getTuner().getSoapyTunerController().getDeviceMinimumFrequency() :
+                SoapyTunerController.MINIMUM_TUNABLE_FREQUENCY_HZ;
     }
 
     @Override
     public long getMaximumTunableFrequency()
     {
-        return SoapyTunerController.MAXIMUM_TUNABLE_FREQUENCY_HZ;
+        return hasTuner() ? getTuner().getSoapyTunerController().getDeviceMaximumFrequency() :
+                SoapyTunerController.MAXIMUM_TUNABLE_FREQUENCY_HZ;
     }
 
     @Override

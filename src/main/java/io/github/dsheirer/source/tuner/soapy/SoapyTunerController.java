@@ -23,9 +23,14 @@ import io.github.dsheirer.source.SourceException;
 import io.github.dsheirer.source.tuner.ITunerErrorListener;
 import io.github.dsheirer.source.tuner.TunerController;
 import io.github.dsheirer.source.tuner.TunerType;
+import io.github.dsheirer.source.tuner.configuration.TunerConfiguration;
 import io.github.dsheirer.source.tuner.soapy.api.SoapyDevice;
 import io.github.dsheirer.source.tuner.soapy.api.SoapyDeviceInfo;
 import io.github.dsheirer.source.tuner.soapy.api.SoapyException;
+import io.github.dsheirer.source.tuner.soapy.api.SoapyRange;
+import java.text.DecimalFormat;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,13 +42,20 @@ public class SoapyTunerController extends TunerController
     private static final Logger mLog = LoggerFactory.getLogger(SoapyTunerController.class);
     public static final long MINIMUM_TUNABLE_FREQUENCY_HZ = 1_000_000;
     public static final long MAXIMUM_TUNABLE_FREQUENCY_HZ = 6_000_000_000L;
+
+    //The sdrtrunk frequency fields hold at most 9999.999999 MHz, so limit the tuner to what the fields can show
+    private static final long MAXIMUM_SUPPORTED_FREQUENCY_HZ = 9_999_999_999L;
     private static final int PLACEHOLDER_SAMPLE_RATE = 2_400_000;
     private static final int MIDDLE_UNUSABLE_BANDWIDTH = 0;
     private static final double USABLE_BANDWIDTH_PERCENTAGE = 1.0;
 
+    private static final DecimalFormat RANGE_FORMAT = new DecimalFormat("0.###");
+
     private final SoapyDeviceInfo mDeviceInfo;
     private SoapyDevice mDevice;
     private long mTunedFrequency = 100_000_000;
+    private long mDeviceMinimumFrequency = MINIMUM_TUNABLE_FREQUENCY_HZ;
+    private long mDeviceMaximumFrequency = MAXIMUM_TUNABLE_FREQUENCY_HZ;
 
     /**
      * Constructs an instance
@@ -68,9 +80,12 @@ public class SoapyTunerController extends TunerController
             try
             {
                 mDevice = SoapyDevice.open(mDeviceInfo.args());
+                readDeviceCapabilities();
             }
             catch(SoapyException se)
             {
+                //Closes the device if it was opened before the failure
+                stop();
                 throw new SourceException(se.getMessage(), se);
             }
         }
@@ -79,6 +94,74 @@ public class SoapyTunerController extends TunerController
         mFrequencyController.setSampleRate(PLACEHOLDER_SAMPLE_RATE);
         mLog.info("SoapySDR device opened: " + mDeviceInfo.args().get("label") +
                 " (no samples are streamed yet)");
+    }
+
+    /**
+     * Reads the frequency, sample rate and bandwidth ranges that the device supports and logs them.  The frequency
+     * range sets the limits of the tuner.
+     */
+    private void readDeviceCapabilities() throws SoapyException
+    {
+        List<SoapyRange> frequencies = mDevice.getFrequencyRanges();
+        List<SoapyRange> sampleRates = mDevice.getSampleRateRanges();
+        List<SoapyRange> bandwidths = mDevice.getBandwidthRanges();
+
+        mLog.info(mDeviceInfo.args().get("label") + " supports frequency [" + format(frequencies) +
+                "] Hz, sample rate [" + format(sampleRates) + "] Hz, bandwidth [" + format(bandwidths) + "] Hz");
+
+        if(!frequencies.isEmpty())
+        {
+            mDeviceMinimumFrequency = (long)Math.ceil(frequencies.stream().mapToDouble(SoapyRange::minimum)
+                    .min().getAsDouble());
+            mDeviceMaximumFrequency = Math.min(MAXIMUM_SUPPORTED_FREQUENCY_HZ,
+                    (long)Math.floor(frequencies.stream().mapToDouble(SoapyRange::maximum).max().getAsDouble()));
+            setMinimumFrequency(mDeviceMinimumFrequency);
+            setMaximumFrequency(mDeviceMaximumFrequency);
+        }
+    }
+
+    /**
+     * Formats ranges for logging, for example: 100000-20600000000, 5000000
+     */
+    private static String format(List<SoapyRange> ranges)
+    {
+        return ranges.stream().map(range -> range.minimum() == range.maximum() ?
+                RANGE_FORMAT.format(range.minimum()) :
+                RANGE_FORMAT.format(range.minimum()) + "-" + RANGE_FORMAT.format(range.maximum()))
+                .collect(Collectors.joining(", "));
+    }
+
+    @Override
+    public void apply(TunerConfiguration config) throws SourceException
+    {
+        super.apply(config);
+
+        //A new configuration has no frequency limits yet, so record the limits that the device reported
+        if(config.getMinimumFrequency() == 0)
+        {
+            config.setMinimumFrequency(mDeviceMinimumFrequency);
+        }
+
+        if(config.getMaximumFrequency() == 0)
+        {
+            config.setMaximumFrequency(mDeviceMaximumFrequency);
+        }
+    }
+
+    /**
+     * Lowest frequency that the device supports, or a default until the device has been opened.
+     */
+    public long getDeviceMinimumFrequency()
+    {
+        return mDeviceMinimumFrequency;
+    }
+
+    /**
+     * Highest frequency that the device supports, or a default until the device has been opened.
+     */
+    public long getDeviceMaximumFrequency()
+    {
+        return mDeviceMaximumFrequency;
     }
 
     @Override

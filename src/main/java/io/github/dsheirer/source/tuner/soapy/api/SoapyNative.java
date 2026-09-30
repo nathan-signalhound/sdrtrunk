@@ -37,12 +37,19 @@ import java.util.Map;
  */
 public final class SoapyNative
 {
+    /** SoapySDRRange: double minimum, double maximum, double step */
+    public static final StructLayout RANGE_LAYOUT = MemoryLayout.structLayout(
+            ValueLayout.JAVA_DOUBLE.withName("minimum"),
+            ValueLayout.JAVA_DOUBLE.withName("maximum"),
+            ValueLayout.JAVA_DOUBLE.withName("step"));
+
     /** SoapySDRKwargs: size_t size, char **keys, char **vals */
     public static final StructLayout KWARGS_LAYOUT = MemoryLayout.structLayout(
             ValueLayout.JAVA_LONG.withName("size"),
             ValueLayout.ADDRESS.withName("keys"),
             ValueLayout.ADDRESS.withName("vals"));
 
+    private static final long RANGE_SIZE = RANGE_LAYOUT.byteSize();
     private static final long KWARGS_SIZE = KWARGS_LAYOUT.byteSize();
     private static final long POINTER_SIZE = ValueLayout.ADDRESS.byteSize();
 
@@ -88,6 +95,35 @@ public final class SoapyNative
         }
 
         return strings;
+    }
+
+    /**
+     * Reads an array of SoapySDRRange structures.
+     * @param array address of the first structure
+     * @param length number of structures
+     * @return list of ranges, empty if the array is null
+     */
+    public static List<SoapyRange> readRanges(MemorySegment array, long length)
+    {
+        List<SoapyRange> ranges = new ArrayList<>();
+
+        if(isNull(array) || length <= 0)
+        {
+            return ranges;
+        }
+
+        MemorySegment structs = array.reinterpret(length * RANGE_SIZE);
+        long doubleSize = ValueLayout.JAVA_DOUBLE.byteSize();
+
+        for(long x = 0; x < length; x++)
+        {
+            long offset = x * RANGE_SIZE;
+            ranges.add(new SoapyRange(structs.get(ValueLayout.JAVA_DOUBLE, offset),
+                    structs.get(ValueLayout.JAVA_DOUBLE, offset + doubleSize),
+                    structs.get(ValueLayout.JAVA_DOUBLE, offset + 2 * doubleSize)));
+        }
+
+        return ranges;
     }
 
     /**

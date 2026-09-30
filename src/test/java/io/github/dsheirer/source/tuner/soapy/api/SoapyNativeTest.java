@@ -109,6 +109,37 @@ public class SoapyNativeTest
         assertThrows(IllegalArgumentException.class, () -> SoapyNative.toArgString(Map.of("a=b", "c")));
     }
 
+    @Test
+    void readRanges()
+    {
+        try(Arena arena = Arena.ofConfined())
+        {
+            MemorySegment array = arena.allocate(SoapyNative.RANGE_LAYOUT.byteSize() * 2);
+            writeRange(array, 0, 100_000, 20_600_000_000.0, 0);
+            writeRange(array, 1, 1_000_000, 2_000_000, 500_000);
+
+            List<SoapyRange> ranges = SoapyNative.readRanges(array, 2);
+            assertEquals(2, ranges.size());
+            assertEquals(new SoapyRange(100_000, 20_600_000_000.0, 0), ranges.get(0));
+            assertEquals(new SoapyRange(1_000_000, 2_000_000, 500_000), ranges.get(1));
+        }
+    }
+
+    @Test
+    void readRangesNullOrEmpty()
+    {
+        assertTrue(SoapyNative.readRanges(MemorySegment.NULL, 2).isEmpty());
+        assertTrue(SoapyNative.readRanges(MemorySegment.NULL, 0).isEmpty());
+    }
+
+    private static void writeRange(MemorySegment array, long index, double minimum, double maximum, double step)
+    {
+        long offset = index * SoapyNative.RANGE_LAYOUT.byteSize();
+        array.set(ValueLayout.JAVA_DOUBLE, offset, minimum);
+        array.set(ValueLayout.JAVA_DOUBLE, offset + 8, maximum);
+        array.set(ValueLayout.JAVA_DOUBLE, offset + 16, step);
+    }
+
     /** Lays out a char** array with each string allocated separately */
     private static MemorySegment stringArray(Arena arena, String... strings)
     {

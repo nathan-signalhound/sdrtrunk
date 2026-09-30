@@ -21,6 +21,8 @@ package io.github.dsheirer.source.tuner.soapy.api;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +35,10 @@ import org.slf4j.LoggerFactory;
 public class SoapyDevice implements AutoCloseable
 {
     private static final Logger mLog = LoggerFactory.getLogger(SoapyDevice.class);
+
+    //SoapySDR direction for receive (SOAPY_SDR_RX) and the only channel that is supported
+    private static final int RX = 1;
+    private static final long CHANNEL = 0;
 
     private final SoapyLibrary mLibrary;
     private MemorySegment mHandle;
@@ -65,6 +71,72 @@ public class SoapyDevice implements AutoCloseable
             }
 
             return new SoapyDevice(library, handle);
+        }
+    }
+
+    /**
+     * Frequency ranges that the device supports, in Hertz.
+     * @throws SoapyException if the device is closed or the call fails
+     */
+    public List<SoapyRange> getFrequencyRanges() throws SoapyException
+    {
+        return readRanges(length -> mLibrary.getFrequencyRange(handle(), RX, CHANNEL, length));
+    }
+
+    /**
+     * Sample rate ranges that the device supports, in samples per second.
+     * @throws SoapyException if the device is closed or the call fails
+     */
+    public List<SoapyRange> getSampleRateRanges() throws SoapyException
+    {
+        return readRanges(length -> mLibrary.getSampleRateRange(handle(), RX, CHANNEL, length));
+    }
+
+    /**
+     * Bandwidth ranges that the device supports, in Hertz.
+     * @throws SoapyException if the device is closed or the call fails
+     */
+    public List<SoapyRange> getBandwidthRanges() throws SoapyException
+    {
+        return readRanges(length -> mLibrary.getBandwidthRange(handle(), RX, CHANNEL, length));
+    }
+
+    private MemorySegment handle() throws SoapyException
+    {
+        if(mHandle == null)
+        {
+            throw new SoapyException("SoapySDR device is closed");
+        }
+
+        return mHandle;
+    }
+
+    /**
+     * A SoapySDR call that returns an array of ranges and reports its length through a pointer.
+     */
+    @FunctionalInterface
+    private interface RangeCall
+    {
+        MemorySegment call(MemorySegment lengthOut) throws SoapyException;
+    }
+
+    /**
+     * Makes the call, copies the ranges it returns and releases the memory that SoapySDR allocated.
+     */
+    private List<SoapyRange> readRanges(RangeCall call) throws SoapyException
+    {
+        try(Arena arena = Arena.ofConfined())
+        {
+            MemorySegment length = arena.allocate(ValueLayout.JAVA_LONG);
+            MemorySegment array = call.call(length);
+            List<SoapyRange> ranges = SoapyNative.readRanges(array, length.get(ValueLayout.JAVA_LONG, 0));
+
+            if(!array.equals(MemorySegment.NULL))
+            {
+                mLibrary.free(array);
+            }
+
+            return ranges;
         }
     }
 
