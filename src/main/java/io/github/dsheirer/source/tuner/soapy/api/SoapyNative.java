@@ -113,17 +113,22 @@ public final class SoapyNative
         }
 
         MemorySegment structs = array.reinterpret(length * RANGE_SIZE);
-        long doubleSize = ValueLayout.JAVA_DOUBLE.byteSize();
 
         for(long x = 0; x < length; x++)
         {
-            long offset = x * RANGE_SIZE;
-            ranges.add(new SoapyRange(structs.get(ValueLayout.JAVA_DOUBLE, offset),
-                    structs.get(ValueLayout.JAVA_DOUBLE, offset + doubleSize),
-                    structs.get(ValueLayout.JAVA_DOUBLE, offset + 2 * doubleSize)));
+            ranges.add(readRange(structs.asSlice(x * RANGE_SIZE, RANGE_SIZE)));
         }
 
         return ranges;
+    }
+
+    public static SoapyRange readRange(MemorySegment range)
+    {
+        long doubleSize = ValueLayout.JAVA_DOUBLE.byteSize();
+
+        return new SoapyRange(range.get(ValueLayout.JAVA_DOUBLE, 0),
+                range.get(ValueLayout.JAVA_DOUBLE, doubleSize),
+                range.get(ValueLayout.JAVA_DOUBLE, 2 * doubleSize));
     }
 
     /**

@@ -30,7 +30,9 @@ import io.github.dsheirer.source.tuner.soapy.api.SoapyException;
 import io.github.dsheirer.source.tuner.soapy.api.SoapyRange;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -61,6 +63,8 @@ public class SoapyTunerController extends TunerController
     private long mTunedFrequency = 100_000_000;
     private int mSampleRate;
     private List<SoapySampleRate> mSampleRates = List.of();
+    private List<SoapyGainElement> mGainElements = List.of();
+    private final Map<String,Double> mGains = new LinkedHashMap<>();
     private long mDeviceMinimumFrequency = MINIMUM_TUNABLE_FREQUENCY_HZ;
     private long mDeviceMaximumFrequency = MAXIMUM_TUNABLE_FREQUENCY_HZ;
 
@@ -199,6 +203,8 @@ public class SoapyTunerController extends TunerController
         mSampleRates = usableSampleRates(sampleRates);
         mLog.info(mDeviceInfo.args().get("label") + " usable sample rates " + mSampleRates);
 
+        readGainElements();
+
         if(!frequencies.isEmpty())
         {
             mDeviceMinimumFrequency = (long)Math.ceil(frequencies.stream().mapToDouble(SoapyRange::minimum)
@@ -210,9 +216,23 @@ public class SoapyTunerController extends TunerController
         }
     }
 
-    /**
-     * Formats ranges for logging, for example: 100000-20600000000, 5000000
-     */
+    private void readGainElements() throws SoapyException
+    {
+        List<SoapyGainElement> elements = new ArrayList<>();
+        mGains.clear();
+
+        for(String name: mDevice.getGainNames())
+        {
+            SoapyRange range = mDevice.getGainRange(name);
+            elements.add(new SoapyGainElement(name, range));
+            mGains.put(name, mDevice.getGain(name));
+            mLog.info(mDeviceInfo.args().get("label") + " gain [" + name + "] range [" + format(List.of(range)) +
+                    "] dB, current gain [" + RANGE_FORMAT.format(mGains.get(name)) + "] dB");
+        }
+
+        mGainElements = elements;
+    }
+
     private static String format(List<SoapyRange> ranges)
     {
         return ranges.stream().map(range -> range.minimum() == range.maximum() ?
@@ -236,9 +256,20 @@ public class SoapyTunerController extends TunerController
             }
 
             soapyConfig.setSampleRate(mSampleRate);
+
+            for(SoapyGainElement element: mGainElements)
+            {
+                Double gain = soapyConfig.getGains().get(element.name());
+
+                if(gain != null && element.range().contains(gain) && gain != mGains.get(element.name()))
+                {
+                    setGain(element.name(), gain);
+                }
+            }
+
+            soapyConfig.setGains(new LinkedHashMap<>(mGains));
         }
 
-        //A new configuration has no frequency limits yet, so record the limits that the device reported
         if(config.getMinimumFrequency() == 0)
         {
             config.setMinimumFrequency(mDeviceMinimumFrequency);
@@ -264,6 +295,36 @@ public class SoapyTunerController extends TunerController
     public long getDeviceMaximumFrequency()
     {
         return mDeviceMaximumFrequency;
+    }
+
+    public List<SoapyGainElement> getGainElements()
+    {
+        return mGainElements;
+    }
+
+    public Map<String,Double> getGains()
+    {
+        return mGains;
+    }
+
+    public void setGain(String name, double gain) throws SourceException
+    {
+        if(mDevice == null)
+        {
+            throw new SourceException("Unable to set gain - SoapySDR device is not open");
+        }
+
+        try
+        {
+            mDevice.setGain(name, gain);
+            mGains.put(name, mDevice.getGain(name));
+            mLog.info(mDeviceInfo.args().get("label") + " gain [" + name + "] [" +
+                    RANGE_FORMAT.format(mGains.get(name)) + "] dB, requested [" + RANGE_FORMAT.format(gain) + "] dB");
+        }
+        catch(SoapyException se)
+        {
+            throw new SourceException(se.getMessage(), se);
+        }
     }
 
     @Override

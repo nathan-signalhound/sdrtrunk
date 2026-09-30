@@ -20,6 +20,7 @@
 package io.github.dsheirer.source.tuner.soapy.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -123,6 +124,27 @@ public class SoapyNativeTest
             assertEquals(new SoapyRange(100_000, 20_600_000_000.0, 0), ranges.get(0));
             assertEquals(new SoapyRange(1_000_000, 2_000_000, 500_000), ranges.get(1));
         }
+    }
+
+    @Test
+    void readSingleRange()
+    {
+        try(Arena arena = Arena.ofConfined())
+        {
+            MemorySegment range = arena.allocate(SoapyNative.RANGE_LAYOUT);
+            writeRange(range, 0, 0, 30, 1);
+            assertEquals(new SoapyRange(0, 30, 1), SoapyNative.readRange(range));
+        }
+    }
+
+    @Test
+    void rangeContains()
+    {
+        SoapyRange range = new SoapyRange(0, 30, 0);
+        assertTrue(range.contains(0));
+        assertTrue(range.contains(30));
+        assertFalse(range.contains(30.5));
+        assertFalse(range.contains(-1));
     }
 
     @Test

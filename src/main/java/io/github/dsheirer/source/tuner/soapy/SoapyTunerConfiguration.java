@@ -22,6 +22,8 @@ package io.github.dsheirer.source.tuner.soapy;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.github.dsheirer.source.tuner.TunerType;
 import io.github.dsheirer.source.tuner.configuration.TunerConfiguration;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Saved settings for a SoapySDR tuner.  Currently holds only the common tuner settings (frequency, frequency
@@ -30,6 +32,7 @@ import io.github.dsheirer.source.tuner.configuration.TunerConfiguration;
 public class SoapyTunerConfiguration extends TunerConfiguration
 {
     private int mSampleRate;
+    private Map<String,Double> mGains = new LinkedHashMap<>();
 
     /**
      * Default constructor to support Jackson
@@ -57,6 +60,16 @@ public class SoapyTunerConfiguration extends TunerConfiguration
     public void setSampleRate(int sampleRate)
     {
         mSampleRate = sampleRate;
+    }
+
+    public Map<String,Double> getGains()
+    {
+        return mGains;
+    }
+
+    public void setGains(Map<String,Double> gains)
+    {
+        mGains = gains;
     }
 
     @JsonIgnore

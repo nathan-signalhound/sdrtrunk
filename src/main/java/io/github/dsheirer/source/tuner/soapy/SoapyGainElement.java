@@ -17,18 +17,15 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.source.tuner.soapy.api;
+package io.github.dsheirer.source.tuner.soapy;
+
+import io.github.dsheirer.source.tuner.soapy.api.SoapyRange;
 
 /**
- * Java copy of the SoapySDRRange native structure.
- * @param minimum value of the range
- * @param maximum value of the range
- * @param step between values, or zero when the range is continuous or the step is not reported
+ * A gain stage of a SoapySDR device, for example RF or ATT.
+ * @param name that the device uses for the gain stage
+ * @param range of gain in decibels that the gain stage supports
  */
-public record SoapyRange(double minimum, double maximum, double step)
+public record SoapyGainElement(String name, SoapyRange range)
 {
-    public boolean contains(double value)
-    {
-        return minimum <= value && value <= maximum;
-    }
 }

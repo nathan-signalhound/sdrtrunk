@@ -23,6 +23,7 @@ import java.lang.foreign.AddressLayout;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
@@ -50,6 +51,11 @@ public class SoapyLibrary
     private final MethodHandle mGetFrequency;
     private final MethodHandle mSetSampleRate;
     private final MethodHandle mGetSampleRate;
+    private final MethodHandle mListGains;
+    private final MethodHandle mSetGainElement;
+    private final MethodHandle mGetGainElement;
+    private final MethodHandle mGetGainElementRange;
+    private final MethodHandle mStringsClear;
     private final MethodHandle mGetNativeStreamFormat;
     private final MethodHandle mSetupStream;
     private final MethodHandle mCloseStream;
@@ -87,6 +93,16 @@ public class SoapyLibrary
                 ValueLayout.JAVA_INT, pointer, ValueLayout.JAVA_INT, sizeT, ValueLayout.JAVA_DOUBLE));
         mGetSampleRate = bind(linker, lookup, "SoapySDRDevice_getSampleRate", FunctionDescriptor.of(
                 ValueLayout.JAVA_DOUBLE, pointer, ValueLayout.JAVA_INT, sizeT));
+        mListGains = bind(linker, lookup, "SoapySDRDevice_listGains", FunctionDescriptor.of(pointer, pointer,
+                ValueLayout.JAVA_INT, sizeT, pointer));
+        mSetGainElement = bind(linker, lookup, "SoapySDRDevice_setGainElement", FunctionDescriptor.of(
+                ValueLayout.JAVA_INT, pointer, ValueLayout.JAVA_INT, sizeT, pointer, ValueLayout.JAVA_DOUBLE));
+        mGetGainElement = bind(linker, lookup, "SoapySDRDevice_getGainElement", FunctionDescriptor.of(
+                ValueLayout.JAVA_DOUBLE, pointer, ValueLayout.JAVA_INT, sizeT, pointer));
+
+        mGetGainElementRange = bind(linker, lookup, "SoapySDRDevice_getGainElementRange", FunctionDescriptor.of(
+                SoapyNative.RANGE_LAYOUT, pointer, ValueLayout.JAVA_INT, sizeT, pointer));
+        mStringsClear = bind(linker, lookup, "SoapySDRStrings_clear", FunctionDescriptor.ofVoid(pointer, sizeT));
         mGetNativeStreamFormat = bind(linker, lookup, "SoapySDRDevice_getNativeStreamFormat",
                 FunctionDescriptor.of(pointer, pointer, ValueLayout.JAVA_INT, sizeT, pointer));
         mSetupStream = bind(linker, lookup, "SoapySDRDevice_setupStream", FunctionDescriptor.of(pointer, pointer,
@@ -310,6 +326,70 @@ public class SoapyLibrary
         catch(Throwable t)
         {
             throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_getSampleRate]", t);
+        }
+    }
+
+    public MemorySegment listGains(MemorySegment device, int direction, long channel, MemorySegment lengthOut)
+            throws SoapyException
+    {
+        try
+        {
+            return (MemorySegment) mListGains.invokeExact(device, direction, channel, lengthOut);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_listGains]", t);
+        }
+    }
+
+    public int setGainElement(MemorySegment device, int direction, long channel, MemorySegment name, double gain)
+            throws SoapyException
+    {
+        try
+        {
+            return (int) mSetGainElement.invokeExact(device, direction, channel, name, gain);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_setGainElement]", t);
+        }
+    }
+
+    public double getGainElement(MemorySegment device, int direction, long channel, MemorySegment name)
+            throws SoapyException
+    {
+        try
+        {
+            return (double) mGetGainElement.invokeExact(device, direction, channel, name);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_getGainElement]", t);
+        }
+    }
+
+    public MemorySegment getGainElementRange(SegmentAllocator allocator, MemorySegment device, int direction,
+                                             long channel, MemorySegment name) throws SoapyException
+    {
+        try
+        {
+            return (MemorySegment) mGetGainElementRange.invokeExact(allocator, device, direction, channel, name);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_getGainElementRange]", t);
+        }
+    }
+
+    public void stringsClear(MemorySegment arrayPointer, long length) throws SoapyException
+    {
+        try
+        {
+            mStringsClear.invokeExact(arrayPointer, length);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRStrings_clear]", t);
         }
     }
 

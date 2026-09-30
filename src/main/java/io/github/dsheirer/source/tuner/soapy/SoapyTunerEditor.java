@@ -24,12 +24,15 @@ import io.github.dsheirer.source.tuner.manager.DiscoveredTuner;
 import io.github.dsheirer.source.tuner.manager.TunerManager;
 import io.github.dsheirer.source.SourceException;
 import io.github.dsheirer.source.tuner.ui.TunerEditor;
+import java.util.LinkedHashMap;
 import java.util.List;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
 import javax.swing.JSeparator;
+import javax.swing.JSlider;
 import net.miginfocom.swing.MigLayout;
 
 /**
@@ -40,6 +43,7 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
     private static final long serialVersionUID = 1L;
 
     private JComboBox<SoapySampleRate> mSampleRateCombo;
+    private JPanel mGainPanel;
 
     /**
      * Constructs an instance
@@ -56,7 +60,7 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
 
     private void init()
     {
-        setLayout(new MigLayout("fill,wrap 3", "[right][grow,fill]", "[][][][][][grow]"));
+        setLayout(new MigLayout("fill,wrap 3", "[right][grow,fill]", "[][][][][][][grow]"));
 
         add(new JLabel("Tuner:"));
         add(getTunerIdLabel(), "wrap");
@@ -68,6 +72,74 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
         add(getFrequencyPanel(), "wrap");
         add(new JLabel("Sample Rate:"));
         add(getSampleRateCombo(), "wrap");
+        add(getGainPanel(), "span,growx");
+    }
+
+    private JPanel getGainPanel()
+    {
+        if(mGainPanel == null)
+        {
+            mGainPanel = new JPanel(new MigLayout("insets 0", "[right][grow,fill][]"));
+        }
+
+        return mGainPanel;
+    }
+
+    private void updateGainControls()
+    {
+        getGainPanel().removeAll();
+
+        if(hasTuner())
+        {
+            for(SoapyGainElement element: getTuner().getSoapyTunerController().getGainElements())
+            {
+                addGainControl(element);
+            }
+        }
+
+        getGainPanel().revalidate();
+        getGainPanel().repaint();
+    }
+
+    private void addGainControl(SoapyGainElement element)
+    {
+        SoapyTunerController controller = getTuner().getSoapyTunerController();
+        int minimum = (int)Math.ceil(element.range().minimum());
+        int maximum = (int)Math.floor(element.range().maximum());
+
+        if(maximum < minimum)
+        {
+            return;
+        }
+
+        int gain = (int)Math.round(controller.getGains().get(element.name()));
+        JSlider slider = new JSlider(JSlider.HORIZONTAL, minimum, maximum, Math.max(minimum, Math.min(maximum, gain)));
+        slider.setToolTipText("Select the " + element.name() + " gain in decibels");
+
+        JLabel valueLabel = new JLabel(String.valueOf(slider.getValue()));
+
+        slider.addChangeListener(e ->
+        {
+            valueLabel.setText(String.valueOf(slider.getValue()));
+
+            if(hasTuner() && !isLoading() && !slider.getValueIsAdjusting())
+            {
+                try
+                {
+                    controller.setGain(element.name(), slider.getValue());
+                    save();
+                }
+                catch(SourceException se)
+                {
+                    JOptionPane.showMessageDialog(SoapyTunerEditor.this, "Unable to set the " + element.name() +
+                            " gain: " + se.getMessage());
+                }
+            }
+        });
+
+        getGainPanel().add(new JLabel(element.name() + " gain (dB):"));
+        getGainPanel().add(slider);
+        getGainPanel().add(valueLabel, "wrap");
     }
 
     private JComboBox<SoapySampleRate> getSampleRateCombo()
@@ -155,6 +227,8 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
             getSampleRateCombo().setEnabled(false);
         }
 
+        updateGainControls();
+
         setLoading(false);
     }
 
@@ -173,6 +247,11 @@ public class SoapyTunerEditor extends TunerEditor<SoapyTuner,SoapyTunerConfigura
             if(sampleRate != null)
             {
                 config.setSampleRate(sampleRate.rate());
+            }
+
+            if(hasTuner())
+            {
+                config.setGains(new LinkedHashMap<>(getTuner().getSoapyTunerController().getGains()));
             }
 
             saveConfiguration();

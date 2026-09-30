@@ -177,6 +177,55 @@ public class SoapyDevice implements AutoCloseable
         return mLibrary.getSampleRate(handle(), RX, CHANNEL);
     }
 
+    public List<String> getGainNames() throws SoapyException
+    {
+        try(Arena arena = Arena.ofConfined())
+        {
+            MemorySegment length = arena.allocate(ValueLayout.JAVA_LONG);
+            MemorySegment array = mLibrary.listGains(handle(), RX, CHANNEL, length);
+            long count = length.get(ValueLayout.JAVA_LONG, 0);
+            List<String> names = SoapyNative.readStrings(array, count);
+
+            if(!array.equals(MemorySegment.NULL))
+            {
+                MemorySegment arrayPointer = arena.allocate(ValueLayout.ADDRESS);
+                arrayPointer.set(ValueLayout.ADDRESS, 0, array);
+                mLibrary.stringsClear(arrayPointer, count);
+            }
+
+            return names;
+        }
+    }
+
+    public SoapyRange getGainRange(String name) throws SoapyException
+    {
+        try(Arena arena = Arena.ofConfined())
+        {
+            return SoapyNative.readRange(mLibrary.getGainElementRange(arena, handle(), RX, CHANNEL,
+                    arena.allocateFrom(name)));
+        }
+    }
+
+    public void setGain(String name, double decibels) throws SoapyException
+    {
+        try(Arena arena = Arena.ofConfined())
+        {
+            if(mLibrary.setGainElement(handle(), RX, CHANNEL, arena.allocateFrom(name), decibels) != 0)
+            {
+                throw new SoapyException("Unable to set gain [" + name + "] to [" + decibels + "] dB: " +
+                        mLibrary.lastError());
+            }
+        }
+    }
+
+    public double getGain(String name) throws SoapyException
+    {
+        try(Arena arena = Arena.ofConfined())
+        {
+            return mLibrary.getGainElement(handle(), RX, CHANNEL, arena.allocateFrom(name));
+        }
+    }
+
     private MemorySegment handle() throws SoapyException
     {
         if(mHandle == null)
