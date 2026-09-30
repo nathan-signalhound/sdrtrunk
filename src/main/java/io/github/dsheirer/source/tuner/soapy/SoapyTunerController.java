@@ -81,6 +81,8 @@ public class SoapyTunerController extends TunerController
             {
                 mDevice = SoapyDevice.open(mDeviceInfo.args());
                 readDeviceCapabilities();
+                mLog.info(mDeviceInfo.args().get("label") + " receive stream set up, format [" +
+                        mDevice.setupStream() + "]");
             }
             catch(SoapyException se)
             {
@@ -196,7 +198,24 @@ public class SoapyTunerController extends TunerController
     @Override
     public void setTunedFrequency(long frequency) throws SourceException
     {
-        mTunedFrequency = frequency;
+        if(mDevice == null)
+        {
+            throw new SourceException("Unable to set frequency - SoapySDR device is not open");
+        }
+
+        try
+        {
+            mDevice.setFrequency(frequency);
+
+            //Keep the frequency that the device reports, since a device can round to what it is able to tune
+            mTunedFrequency = Math.round(mDevice.getFrequency());
+            mLog.info(mDeviceInfo.args().get("label") + " tuned to [" + mTunedFrequency + "] Hz, requested [" +
+                    frequency + "] Hz");
+        }
+        catch(SoapyException se)
+        {
+            throw new SourceException(se.getMessage(), se);
+        }
     }
 
     @Override

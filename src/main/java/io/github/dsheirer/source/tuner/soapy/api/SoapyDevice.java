@@ -42,6 +42,7 @@ public class SoapyDevice implements AutoCloseable
 
     private final SoapyLibrary mLibrary;
     private MemorySegment mHandle;
+    private MemorySegment mStream;
 
     private SoapyDevice(SoapyLibrary library, MemorySegment handle)
     {
@@ -101,6 +102,67 @@ public class SoapyDevice implements AutoCloseable
         return readRanges(length -> mLibrary.getBandwidthRange(handle(), RX, CHANNEL, length));
     }
 
+    /**
+     * Sets up the receive stream.
+     * @return format of the stream, for example CF32
+     * @throws SoapyException if the device is closed or the stream cannot be set up
+     */
+    public String setupStream() throws SoapyException
+    {
+        try(Arena arena = Arena.ofConfined())
+        {
+            MemorySegment fullScale = arena.allocate(ValueLayout.JAVA_DOUBLE);
+            MemorySegment nativeFormat = mLibrary.getNativeStreamFormat(handle(), RX, CHANNEL, fullScale);
+            String format = SoapyNative.readString(nativeFormat);
+
+            if(!nativeFormat.equals(MemorySegment.NULL))
+            {
+                mLibrary.free(nativeFormat);
+            }
+
+            if(format == null)
+            {
+                throw new SoapyException("SoapySDR device did not report a stream format: " + mLibrary.lastError());
+            }
+
+            MemorySegment channels = arena.allocate(ValueLayout.JAVA_LONG);
+            channels.set(ValueLayout.JAVA_LONG, 0, CHANNEL);
+
+            MemorySegment stream = mLibrary.setupStream(handle(), RX, arena.allocateFrom(format), channels, 1,
+                    MemorySegment.NULL);
+
+            if(stream.equals(MemorySegment.NULL))
+            {
+                throw new SoapyException("Unable to set up SoapySDR stream [" + format + "]: " + mLibrary.lastError());
+            }
+
+            mStream = stream;
+            return format;
+        }
+    }
+
+    /**
+     * Sets the center frequency.
+     * @param hertz to tune to
+     * @throws SoapyException if the device is closed or the device rejects the frequency
+     */
+    public void setFrequency(double hertz) throws SoapyException
+    {
+        if(mLibrary.setFrequency(handle(), RX, CHANNEL, hertz, MemorySegment.NULL) != 0)
+        {
+            throw new SoapyException("Unable to set frequency [" + hertz + "] Hz: " + mLibrary.lastError());
+        }
+    }
+
+    /**
+     * Center frequency that the device reports, in Hertz.
+     * @throws SoapyException if the device is closed or the call fails
+     */
+    public double getFrequency() throws SoapyException
+    {
+        return mLibrary.getFrequency(handle(), RX, CHANNEL);
+    }
+
     private MemorySegment handle() throws SoapyException
     {
         if(mHandle == null)
@@ -150,6 +212,17 @@ public class SoapyDevice implements AutoCloseable
         {
             try
             {
+                //The stream has to be closed before the device that owns it
+                if(mStream != null)
+                {
+                    if(mLibrary.closeStream(mHandle, mStream) != 0)
+                    {
+                        mLog.warn("Error closing SoapySDR stream: " + mLibrary.lastError());
+                    }
+
+                    mStream = null;
+                }
+
                 if(mLibrary.unmake(mHandle) != 0)
                 {
                     mLog.warn("Error closing SoapySDR device: " + mLibrary.lastError());

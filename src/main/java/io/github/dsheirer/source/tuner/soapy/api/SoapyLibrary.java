@@ -46,6 +46,11 @@ public class SoapyLibrary
     private final MethodHandle mGetFrequencyRange;
     private final MethodHandle mGetSampleRateRange;
     private final MethodHandle mGetBandwidthRange;
+    private final MethodHandle mSetFrequency;
+    private final MethodHandle mGetFrequency;
+    private final MethodHandle mGetNativeStreamFormat;
+    private final MethodHandle mSetupStream;
+    private final MethodHandle mCloseStream;
     private final MethodHandle mFree;
 
     /**
@@ -72,6 +77,16 @@ public class SoapyLibrary
         mGetFrequencyRange = bind(linker, lookup, "SoapySDRDevice_getFrequencyRange", rangeArray);
         mGetSampleRateRange = bind(linker, lookup, "SoapySDRDevice_getSampleRateRange", rangeArray);
         mGetBandwidthRange = bind(linker, lookup, "SoapySDRDevice_getBandwidthRange", rangeArray);
+        mSetFrequency = bind(linker, lookup, "SoapySDRDevice_setFrequency", FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                pointer, ValueLayout.JAVA_INT, sizeT, ValueLayout.JAVA_DOUBLE, pointer));
+        mGetFrequency = bind(linker, lookup, "SoapySDRDevice_getFrequency", FunctionDescriptor.of(
+                ValueLayout.JAVA_DOUBLE, pointer, ValueLayout.JAVA_INT, sizeT));
+        mGetNativeStreamFormat = bind(linker, lookup, "SoapySDRDevice_getNativeStreamFormat",
+                FunctionDescriptor.of(pointer, pointer, ValueLayout.JAVA_INT, sizeT, pointer));
+        mSetupStream = bind(linker, lookup, "SoapySDRDevice_setupStream", FunctionDescriptor.of(pointer, pointer,
+                ValueLayout.JAVA_INT, pointer, pointer, sizeT, pointer));
+        mCloseStream = bind(linker, lookup, "SoapySDRDevice_closeStream",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, pointer, pointer));
         mFree = bind(linker, lookup, "SoapySDR_free", FunctionDescriptor.ofVoid(pointer));
     }
 
@@ -225,6 +240,109 @@ public class SoapyLibrary
         catch(Throwable t)
         {
             throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_" + name + "]", t);
+        }
+    }
+
+    /**
+     * Sets the center frequency.
+     * @param device handle from make
+     * @param direction of the channel (1 for receive)
+     * @param channel index
+     * @param frequency in Hertz
+     * @param args tuning arguments (a SoapySDRKwargs pointer), or MemorySegment.NULL for none
+     * @return zero on success, or a negative error code
+     */
+    public int setFrequency(MemorySegment device, int direction, long channel, double frequency, MemorySegment args)
+            throws SoapyException
+    {
+        try
+        {
+            return (int) mSetFrequency.invokeExact(device, direction, channel, frequency, args);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_setFrequency]", t);
+        }
+    }
+
+    /**
+     * Center frequency in Hertz.
+     * @param device handle from make
+     * @param direction of the channel (1 for receive)
+     * @param channel index
+     */
+    public double getFrequency(MemorySegment device, int direction, long channel) throws SoapyException
+    {
+        try
+        {
+            return (double) mGetFrequency.invokeExact(device, direction, channel);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_getFrequency]", t);
+        }
+    }
+
+    /**
+     * Stream format that the device produces natively.
+     * @param device handle from make
+     * @param direction of the channel (1 for receive)
+     * @param channel index
+     * @param fullScaleOut address of a double that receives the full scale value of the samples
+     * @return format string, for example CF32, which the caller must release with free
+     */
+    public MemorySegment getNativeStreamFormat(MemorySegment device, int direction, long channel,
+                                               MemorySegment fullScaleOut) throws SoapyException
+    {
+        try
+        {
+            return (MemorySegment) mGetNativeStreamFormat.invokeExact(device, direction, channel, fullScaleOut);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_getNativeStreamFormat]", t);
+        }
+    }
+
+    /**
+     * Sets up a stream.  The stream does not produce samples until it is activated.
+     * @param device handle from make
+     * @param direction of the stream (1 for receive)
+     * @param format string (null-terminated), for example CF32
+     * @param channels address of an array of size_t channel indexes
+     * @param channelCount number of channels
+     * @param args stream arguments (a SoapySDRKwargs pointer), or MemorySegment.NULL for none
+     * @return stream handle, or NULL on failure (see lastError).  Release with closeStream
+     */
+    public MemorySegment setupStream(MemorySegment device, int direction, MemorySegment format,
+                                     MemorySegment channels, long channelCount, MemorySegment args)
+            throws SoapyException
+    {
+        try
+        {
+            return (MemorySegment) mSetupStream.invokeExact(device, direction, format, channels, channelCount, args);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_setupStream]", t);
+        }
+    }
+
+    /**
+     * Closes a stream.
+     * @param device handle from make
+     * @param stream handle from setupStream
+     * @return zero on success, or a negative error code
+     */
+    public int closeStream(MemorySegment device, MemorySegment stream) throws SoapyException
+    {
+        try
+        {
+            return (int) mCloseStream.invokeExact(device, stream);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_closeStream]", t);
         }
     }
 
