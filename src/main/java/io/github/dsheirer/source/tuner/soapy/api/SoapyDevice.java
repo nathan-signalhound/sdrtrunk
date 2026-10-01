@@ -40,9 +40,17 @@ public class SoapyDevice implements AutoCloseable
     private static final int RX = 1;
     private static final long CHANNEL = 0;
 
+    public static final int STREAM_TIMEOUT = -1;
+    public static final int STREAM_OVERFLOW = -4;
+
     private final SoapyLibrary mLibrary;
     private MemorySegment mHandle;
     private MemorySegment mStream;
+    private SoapyStreamFormat mStreamFormat;
+    private Arena mStreamArena;
+    private MemorySegment mReadBuffers;
+    private MemorySegment mReadFlags;
+    private MemorySegment mReadTime;
 
     private SoapyDevice(SoapyLibrary library, MemorySegment handle)
     {
@@ -125,6 +133,13 @@ public class SoapyDevice implements AutoCloseable
                 throw new SoapyException("SoapySDR device did not report a stream format: " + mLibrary.lastError());
             }
 
+            SoapyStreamFormat streamFormat = SoapyStreamFormat.fromName(format);
+
+            if(streamFormat == null)
+            {
+                throw new SoapyException("Unsupported SoapySDR stream format [" + format + "]");
+            }
+
             MemorySegment channels = arena.allocate(ValueLayout.JAVA_LONG);
             channels.set(ValueLayout.JAVA_LONG, 0, CHANNEL);
 
@@ -137,7 +152,60 @@ public class SoapyDevice implements AutoCloseable
             }
 
             mStream = stream;
+            mStreamFormat = streamFormat;
+            mStreamArena = Arena.ofShared();
+            mReadBuffers = mStreamArena.allocate(ValueLayout.ADDRESS);
+            mReadFlags = mStreamArena.allocate(ValueLayout.JAVA_INT);
+            mReadTime = mStreamArena.allocate(ValueLayout.JAVA_LONG);
             return format;
+        }
+    }
+
+    public SoapyStreamFormat getStreamFormat() throws SoapyException
+    {
+        requireStream();
+        return mStreamFormat;
+    }
+
+    public long getStreamMtu() throws SoapyException
+    {
+        requireStream();
+        return mLibrary.getStreamMtu(handle(), mStream);
+    }
+
+    public void activateStream() throws SoapyException
+    {
+        requireStream();
+
+        if(mLibrary.activateStream(handle(), mStream) != 0)
+        {
+            throw new SoapyException("Unable to activate SoapySDR stream: " + mLibrary.lastError());
+        }
+    }
+
+    public void deactivateStream() throws SoapyException
+    {
+        requireStream();
+
+        if(mLibrary.deactivateStream(handle(), mStream) != 0)
+        {
+            throw new SoapyException("Unable to deactivate SoapySDR stream: " + mLibrary.lastError());
+        }
+    }
+
+    public int readStream(MemorySegment buffer, int capacity, long timeoutMicroseconds) throws SoapyException
+    {
+        requireStream();
+        mReadBuffers.set(ValueLayout.ADDRESS, 0, buffer);
+        return mLibrary.readStream(handle(), mStream, mReadBuffers, capacity, mReadFlags, mReadTime,
+                timeoutMicroseconds);
+    }
+
+    private void requireStream() throws SoapyException
+    {
+        if(mStream == null)
+        {
+            throw new SoapyException("SoapySDR stream has not been set up");
         }
     }
 
@@ -317,6 +385,8 @@ public class SoapyDevice implements AutoCloseable
                     }
 
                     mStream = null;
+                    mStreamArena.close();
+                    mStreamArena = null;
                 }
 
                 if(mLibrary.unmake(mHandle) != 0)

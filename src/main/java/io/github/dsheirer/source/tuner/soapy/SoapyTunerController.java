@@ -19,6 +19,8 @@
 
 package io.github.dsheirer.source.tuner.soapy;
 
+import io.github.dsheirer.buffer.INativeBuffer;
+import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.source.SourceException;
 import io.github.dsheirer.source.tuner.ITunerErrorListener;
 import io.github.dsheirer.source.tuner.TunerController;
@@ -67,6 +69,7 @@ public class SoapyTunerController extends TunerController
     private final Map<String,Double> mGains = new LinkedHashMap<>();
     private List<String> mAntennas = List.of();
     private String mAntenna;
+    private SoapySampleReader mSampleReader;
     private long mDeviceMinimumFrequency = MINIMUM_TUNABLE_FREQUENCY_HZ;
     private long mDeviceMaximumFrequency = MAXIMUM_TUNABLE_FREQUENCY_HZ;
 
@@ -104,8 +107,12 @@ public class SoapyTunerController extends TunerController
 
                 applySampleRate(mSampleRates.get(0).rate());
                 mFrequencyController.setFrequency(mTunedFrequency);
-                mLog.info("SoapySDR device opened: " + mDeviceInfo.args().get("label") +
-                        " (no samples are streamed yet)");
+                mLog.info("SoapySDR device opened: " + mDeviceInfo.args().get("label"));
+
+                if(hasBufferListeners())
+                {
+                    startSampleReader();
+                }
             }
             catch(SoapyException se)
             {
@@ -372,8 +379,78 @@ public class SoapyTunerController extends TunerController
     }
 
     @Override
+    public void addBufferListener(Listener<INativeBuffer> listener)
+    {
+        getLock().lock();
+
+        try
+        {
+            if(!hasBufferListeners())
+            {
+                startSampleReader();
+            }
+
+            super.addBufferListener(listener);
+        }
+        finally
+        {
+            getLock().unlock();
+        }
+    }
+
+    @Override
+    public void removeBufferListener(Listener<INativeBuffer> listener)
+    {
+        getLock().lock();
+
+        try
+        {
+            super.removeBufferListener(listener);
+
+            if(!hasBufferListeners())
+            {
+                stopSampleReader();
+            }
+        }
+        finally
+        {
+            getLock().unlock();
+        }
+    }
+
+    private void startSampleReader()
+    {
+        if(mDevice != null && mSampleReader == null)
+        {
+            mSampleReader = new SoapySampleReader(mDevice, mDeviceInfo.args().get("label"));
+
+            try
+            {
+                mSampleReader.start();
+            }
+            catch(SoapyException se)
+            {
+                mLog.error("Unable to start the SoapySDR sample stream", se);
+                setErrorMessage("Unable to start the sample stream - " + se.getMessage());
+                mSampleReader = null;
+            }
+        }
+    }
+
+    private void stopSampleReader()
+    {
+        if(mSampleReader != null)
+        {
+            mSampleReader.stop();
+            mSampleReader = null;
+        }
+    }
+
+    @Override
     public void stop()
     {
+        stopSampleReader();
+
         if(mDevice != null)
         {
             mDevice.close();

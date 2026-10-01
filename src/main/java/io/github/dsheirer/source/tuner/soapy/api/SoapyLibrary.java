@@ -22,11 +22,13 @@ package io.github.dsheirer.source.tuner.soapy.api;
 import java.lang.foreign.AddressLayout;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
+import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 
 /**
  * Thin binding to the SoapySDR C API (SoapySDR/Device.h and SoapySDR/Types.h).
@@ -62,6 +64,10 @@ public class SoapyLibrary
     private final MethodHandle mGetNativeStreamFormat;
     private final MethodHandle mSetupStream;
     private final MethodHandle mCloseStream;
+    private final MethodHandle mGetStreamMtu;
+    private final MethodHandle mActivateStream;
+    private final MethodHandle mDeactivateStream;
+    private final MethodHandle mReadStream;
     private final MethodHandle mFree;
 
     /**
@@ -118,6 +124,24 @@ public class SoapyLibrary
                 ValueLayout.JAVA_INT, pointer, pointer, sizeT, pointer));
         mCloseStream = bind(linker, lookup, "SoapySDRDevice_closeStream",
                 FunctionDescriptor.of(ValueLayout.JAVA_INT, pointer, pointer));
+        mGetStreamMtu = bind(linker, lookup, "SoapySDRDevice_getStreamMTU", FunctionDescriptor.of(sizeT, pointer,
+                pointer));
+        mActivateStream = bind(linker, lookup, "SoapySDRDevice_activateStream", FunctionDescriptor.of(
+                ValueLayout.JAVA_INT, pointer, pointer, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, sizeT));
+        mDeactivateStream = bind(linker, lookup, "SoapySDRDevice_deactivateStream", FunctionDescriptor.of(
+                ValueLayout.JAVA_INT, pointer, pointer, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG));
+
+        MemoryLayout cLong = linker.canonicalLayouts().get("long");
+        MethodHandle readStream = bind(linker, lookup, "SoapySDRDevice_readStream", FunctionDescriptor.of(
+                ValueLayout.JAVA_INT, pointer, pointer, pointer, sizeT, pointer, pointer, cLong));
+
+        if(cLong.byteSize() == Integer.BYTES)
+        {
+            readStream = MethodHandles.explicitCastArguments(readStream,
+                    readStream.type().changeParameterType(6, long.class));
+        }
+
+        mReadStream = readStream;
         mFree = bind(linker, lookup, "SoapySDR_free", FunctionDescriptor.ofVoid(pointer));
     }
 
@@ -499,6 +523,57 @@ public class SoapyLibrary
         catch(Throwable t)
         {
             throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_closeStream]", t);
+        }
+    }
+
+    public long getStreamMtu(MemorySegment device, MemorySegment stream) throws SoapyException
+    {
+        try
+        {
+            return (long) mGetStreamMtu.invokeExact(device, stream);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_getStreamMTU]", t);
+        }
+    }
+
+    public int activateStream(MemorySegment device, MemorySegment stream) throws SoapyException
+    {
+        try
+        {
+            return (int) mActivateStream.invokeExact(device, stream, 0, 0L, 0L);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_activateStream]", t);
+        }
+    }
+
+    public int deactivateStream(MemorySegment device, MemorySegment stream) throws SoapyException
+    {
+        try
+        {
+            return (int) mDeactivateStream.invokeExact(device, stream, 0, 0L);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_deactivateStream]", t);
+        }
+    }
+
+    public int readStream(MemorySegment device, MemorySegment stream, MemorySegment buffers, long capacity,
+                          MemorySegment flagsOut, MemorySegment timeNsOut, long timeoutMicroseconds)
+            throws SoapyException
+    {
+        try
+        {
+            return (int) mReadStream.invokeExact(device, stream, buffers, capacity, flagsOut, timeNsOut,
+                    timeoutMicroseconds);
+        }
+        catch(Throwable t)
+        {
+            throw new SoapyException("Error invoking SoapySDR function [SoapySDRDevice_readStream]", t);
         }
     }
 
