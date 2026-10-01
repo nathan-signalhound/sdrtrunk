@@ -52,6 +52,9 @@ public class SoapyTunerController extends TunerController
 
     //The sdrtrunk frequency fields hold at most 9999.999999 MHz, so limit the tuner to what the fields can show
     private static final long MAXIMUM_SUPPORTED_FREQUENCY_HZ = 9_999_999_999L;
+    private static final int MINIMUM_BUFFER_SAMPLES = 8_192;
+    private static final int MAXIMUM_BUFFER_SAMPLES = 1_048_576;
+    private static final int BUFFERS_PER_SECOND = 200;
     private static final long CHANNEL_SPACING_HZ = 25_000;
     private static final long MINIMUM_SAMPLE_RATE_HZ = 1_000_000;
     private static final long MAXIMUM_SAMPLE_RATE_HZ = 200_000_000;
@@ -422,7 +425,8 @@ public class SoapyTunerController extends TunerController
     {
         if(mDevice != null && mSampleReader == null)
         {
-            mSampleReader = new SoapySampleReader(mDevice, mDeviceInfo.args().get("label"));
+            mSampleReader = new SoapySampleReader(mDevice, mDeviceInfo.args().get("label"), getBufferSampleCount(),
+                    mSampleRate / 1000.0f, this::broadcast);
 
             try
             {
@@ -468,7 +472,15 @@ public class SoapyTunerController extends TunerController
     @Override
     public int getBufferSampleCount()
     {
-        return 0;
+        int target = mSampleRate / BUFFERS_PER_SECOND;
+        int count = MINIMUM_BUFFER_SAMPLES;
+
+        while(count < target && count < MAXIMUM_BUFFER_SAMPLES)
+        {
+            count *= 2;
+        }
+
+        return count;
     }
 
     @Override

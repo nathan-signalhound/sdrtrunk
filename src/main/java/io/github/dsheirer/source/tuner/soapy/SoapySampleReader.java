@@ -18,11 +18,15 @@
  */
 package io.github.dsheirer.source.tuner.soapy;
 
+import io.github.dsheirer.buffer.FloatNativeBuffer;
+import io.github.dsheirer.buffer.INativeBuffer;
 import io.github.dsheirer.source.tuner.soapy.api.SoapyDevice;
 import io.github.dsheirer.source.tuner.soapy.api.SoapyException;
+import io.github.dsheirer.source.tuner.soapy.api.SoapyStreamFormat;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,13 +41,20 @@ public class SoapySampleReader implements Runnable
 
     private final SoapyDevice mDevice;
     private final String mLabel;
+    private final int mBufferSampleCount;
+    private final float mSamplesPerMillisecond;
+    private final Consumer<INativeBuffer> mBufferConsumer;
     private final AtomicBoolean mRunning = new AtomicBoolean();
     private Thread mThread;
 
-    public SoapySampleReader(SoapyDevice device, String label)
+    public SoapySampleReader(SoapyDevice device, String label, int bufferSampleCount, float samplesPerMillisecond,
+                             Consumer<INativeBuffer> bufferConsumer)
     {
         mDevice = device;
         mLabel = label;
+        mBufferSampleCount = bufferSampleCount;
+        mSamplesPerMillisecond = samplesPerMillisecond;
+        mBufferConsumer = bufferConsumer;
     }
 
     public void start() throws SoapyException
@@ -97,7 +108,12 @@ public class SoapySampleReader implements Runnable
         {
             long mtu = mDevice.getStreamMtu();
             int capacity = mtu > 0 ? (int)Math.min(mtu, MAXIMUM_CAPACITY) : DEFAULT_CAPACITY;
-            MemorySegment buffer = arena.allocate((long)capacity * mDevice.getStreamFormat().getBytesPerSample());
+            SoapyStreamFormat format = mDevice.getStreamFormat();
+            int bytesPerSample = format.getBytesPerSample();
+            MemorySegment buffer = arena.allocate((long)capacity * bytesPerSample, Double.BYTES);
+
+            float[] pending = new float[mBufferSampleCount * 2];
+            int pendingSamples = 0;
 
             long windowStart = System.nanoTime();
             long samples = 0;
@@ -112,6 +128,24 @@ public class SoapySampleReader implements Runnable
                 if(result > 0)
                 {
                     samples += result;
+                    int offset = 0;
+
+                    while(offset < result)
+                    {
+                        int count = Math.min(result - offset, mBufferSampleCount - pendingSamples);
+                        SoapySampleConverter.convert(buffer.asSlice((long)offset * bytesPerSample), format, count,
+                                pending, pendingSamples);
+                        offset += count;
+                        pendingSamples += count;
+
+                        if(pendingSamples == mBufferSampleCount)
+                        {
+                            mBufferConsumer.accept(new FloatNativeBuffer(pending, System.currentTimeMillis(),
+                                    mSamplesPerMillisecond));
+                            pending = new float[mBufferSampleCount * 2];
+                            pendingSamples = 0;
+                        }
+                    }
                 }
                 else if(result == SoapyDevice.STREAM_TIMEOUT)
                 {
